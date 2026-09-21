@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#080b0e" />
+    <meta name="description" content="Maker 社团。好奇、探索、动手，把想法变成现实。" />
+    <title>maker — 把想法，变成现实</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
+    <script src="./main.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-label="Maker 社团首页">
+        <div id="universe" aria-hidden="true"></div>
+        <header>
+          <a class="brand" href="./index.html" aria-label="Maker 首页">m<span class="brand-dot">✳</span></a>
+          <span class="club-label">MAKER CLUB</span>
+          <a class="nav-link" href="#about">关于我们 <i data-lucide="arrow-up-right"></i></a>
+        </header>
+        <div class="title-wrap">
+          <h1 aria-label="maker"><span>mak</span><span id="galaxy-letter" aria-hidden="true"><span class="fallback-letter">e</span></span><span>r</span></h1>
+          <p class="manifesto">每一个想法，都有自己的宇宙。</p>
+        </div>
+        <div class="hero-footer">
+          <a class="explore" href="#about"><span class="scroll-line"></span>好奇心，从这里开始 <i data-lucide="arrow-down"></i></a>
+          <div class="scene-controls">
+            <span class="live-label"><span></span> A LITTLE UNIVERSE</span>
+            <button id="pause" type="button" aria-label="暂停动画" title="暂停动画" aria-pressed="false"><i data-lucide="pause"></i></button>
+            <button id="reset" type="button" aria-label="重置星系" title="重置星系"><i data-lucide="rotate-ccw"></i></button>
+          </div>
+        </div>
+      </section>
+      <section id="about" class="about">
+        <div class="section-label"><span>01 / ABOUT US</span><span>想象没有边界，创造不止于此。</span></div>
+        <div class="about-content"><h2>把想法，<br />变成现实。</h2><div><p>我们是一群喜欢追问「为什么」，<br />也愿意动手试试「能不能」的人。</p><p>从第一行代码，到第一个原型。<br />在 Maker，让好奇心找到同伴，<br />让脑海里的火花，成为真实的作品。</p><span class="about-signature">STAY CURIOUS. MAKE SOMETHING.</span></div></div>
+        <footer><span>maker / 创客社团</span><a href="#">回到星系 <i data-lucide="arrow-up-right"></i></a></footer>
+      </section>
+    </main>
+  </body>
+</html>
