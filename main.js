@@ -122,15 +122,28 @@ window.addEventListener('load', () => {
     const TAIL_TILT = Math.PI / 18;
     const TAIL_LENGTH = 900;
 
-    // 臂路径：螺旋段（t ≤ joinT）+ 直线尾段（t > joinT），返回极坐标 { angle, radius }
+    // 臂路径：回扫段（t < approachT）+ 螺旋段（u ≤ joinT）+ 直线尾段（u > joinT），返回极坐标 { angle, radius }
+    // 回扫段：从臂的远端起点（approach 指定）到螺旋起点做屏幕空间直线回扫——直线在极坐标下就是"很陡的曲线"，
+    // 它属于臂本身：星尘、星团流、引力都沿这段走（不是额外补画的内容）。
     function armPath(arm, t) {
-      if (t <= arm.joinT) {
+      const approachT = arm.approachT || 0;
+      if (approachT && t < approachT) {
+        const s = t / approachT;
+        const reach = arm.approach.radius * nebulaRadiusX;
+        const startX = nebulaStartRadius * Math.cos(arm.offset);
+        const startY = nebulaStartRadius * Math.sin(arm.offset) * nebulaFlatten;
+        const endX = reach * Math.cos(arm.approach.angle);
+        const endY = reach * Math.sin(arm.approach.angle) * nebulaFlatten;
+        return xyToPolar(endX + (startX - endX) * s, endY + (startY - endY) * s);
+      }
+      const u = approachT ? (t - approachT) / (1 - approachT) : t;
+      if (u <= arm.joinT) {
         return {
-          angle: arm.offset + t * arm.swirl,
-          radius: nebulaStartRadius + Math.pow(Math.max(t, 0), 2.35) * arm.length * (nebulaRadiusX - nebulaStartRadius),
+          angle: arm.offset + u * arm.swirl,
+          radius: nebulaStartRadius + Math.pow(Math.max(u, 0), 2.35) * arm.length * (nebulaRadiusX - nebulaStartRadius),
         };
       }
-      const k = (t - arm.joinT) / (1 - arm.joinT);
+      const k = (u - arm.joinT) / (1 - arm.joinT);
       return xyToPolar(arm.joinX + k * TAIL_LENGTH * Math.cos(TAIL_TILT), arm.joinY + k * TAIL_LENGTH * Math.sin(TAIL_TILT));
     }
 
@@ -234,10 +247,15 @@ window.addEventListener('load', () => {
       }
 
       // 旋臂形态（极坐标拟合手绘轨迹）：r(t) = r₀ + t^2.35·L·(R−r₀)，θ(t) = θ₀ + t·swirl（前段紧贴核心盘绕、后段甩出）
+      // approach＝回扫段起点（angle 为弧度、radius 为 radiusX 倍数）：从该点直线回扫接入螺旋起点
+      // 内臂：桌面基准从 (−190, +72) 起（约 0.47R、151°），回扫段长约 200px＝e 的中间横线
+      // 外臂：从 (−230, +125) 起（约 0.63R、141°），回扫段长约 240px
       const baseOffset = 1.44;
       const arms = [
-        { offset: baseOffset, swirl: -6.9, length: 1.55, bright: 1, clusters: 38, dust: 1900 },
-        { offset: baseOffset + .26, swirl: -5.55, length: 1.8, bright: .5, clusters: 15, dust: 850 },
+        { offset: baseOffset, swirl: -6.9, length: 1.55, bright: 1, clusters: 38, dust: 1900,
+          approachT: .12, approach: { angle: 2.63, radius: .467 } },
+        { offset: baseOffset + .26, swirl: -5.55, length: 2, bright: .5, clusters: 15, dust: 850,
+          approachT: .12, approach: { angle: 2.46, radius: .634 } },
       ];
       nebulaArms = arms;
 
@@ -294,6 +312,7 @@ window.addEventListener('load', () => {
           streams.push({
             offset: arm.offset, swirl: arm.swirl, length: arm.length,
             joinT: arm.joinT, joinX: arm.joinX, joinY: arm.joinY,
+            approach: arm.approach, approachT: arm.approachT,
             t, speed: .01 + rng() * .012,
             members,
           });
@@ -318,6 +337,7 @@ window.addEventListener('load', () => {
           streams.push({
             offset: arm.offset, swirl: arm.swirl, length: arm.length,
             joinT: arm.joinT, joinX: arm.joinX, joinY: arm.joinY,
+            approach: arm.approach, approachT: arm.approachT,
             t: rng(),
             speed: .008 + rng() * .014,
             members: [{
@@ -436,8 +456,9 @@ window.addEventListener('load', () => {
           let pull = 0;
           for (const arm of nebulaArms) {
             const arc = arm.length * (nebulaRadiusX - nebulaStartRadius);
-            const t = Math.min(1, Math.max(0, Math.pow((star.r - nebulaStartRadius) / arc, 1 / 2.35)));
-            let dTheta = star.theta - armPath(arm, t).angle;
+            const u = Math.min(1, Math.max(0, Math.pow((star.r - nebulaStartRadius) / arc, 1 / 2.35)));
+            const approachT = arm.approachT || 0;
+            let dTheta = star.theta - armPath(arm, approachT + (1 - approachT) * u).angle;
             dTheta -= Math.round(dTheta / tau) * tau;
             const distance = Math.abs(dTheta) * star.r;
             if (distance > 240) continue;
