@@ -4,10 +4,15 @@ window.addEventListener('load', () => {
     const letter = document.querySelector('#galaxy-letter');
     const pauseButton = document.querySelector('#pause');
     const resetButton = document.querySelector('#reset');
+    const speedControl = document.querySelector('#speed');
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
     const seed = 20260921;
+    const galaxyZoom = 2;
+    const starCountScale = 2;
+    const armSpread = 1.5;
 
     let paused = reducedMotion.matches;
+    let motionSpeed = Number(speedControl.value);
     let animationFrame;
     let lastTime = 0;
     let elapsed = 0;
@@ -18,16 +23,27 @@ window.addEventListener('load', () => {
     let nebulaWidth = 0;
     let nebulaHeight = 0;
     let twinklers = [];
+    let backStars = [];
     let inflows = [];
     let streams = [];
     let nebulaRadiusX = 0;
     let nebulaStartRadius = 0;
+    let nebulaArm = null;
     let nebulaFlatten = 1;
+    let nebulaRightBias = 0;
+    let nebulaZoom = 1;
+    let nebulaWakeRadius = 0;
+    let nebulaWakeCore = 0;
     let nebulaCenterX = 0;
     let nebulaCenterY = 0;
-    let nebulaArms = [];
     let introStart = 0;
     const pointer = { x: 0, y: 0, targetX: 0, targetY: 0 };
+
+    function armShift(t) {
+      const progress = Math.min(1, Math.max(0, t));
+      const smooth = progress * progress * (3 - 2 * progress);
+      return smooth * nebulaRightBias;
+    }
 
     function refreshIcons() {
       window.lucide?.createIcons();
@@ -108,43 +124,84 @@ window.addEventListener('load', () => {
       target.drawImage(sprite, x - size / 2, y - size / 2, size, size);
     }
 
-    // —— 坐标转换：极坐标（盘面角度/半径）↔ 画布坐标（椭圆盘映射：y 按 flatten 压缩）——
-    function polarToXY(angle, radius) {
-      return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius * nebulaFlatten };
+    function cubicBezierEase(t) {
+      const clamped = Math.min(1, Math.max(0, t));
+      return clamped * clamped * (3 - 2 * clamped);
     }
 
-    function xyToPolar(x, y) {
-      const diskY = y / nebulaFlatten;
-      return { angle: Math.atan2(diskY, x), radius: Math.hypot(diskY, x) };
+    // 按弧长采样臂参数：半径从内端到外端要变化数倍，等 t 采样会让内侧在屏幕上挤成一团、外侧拉稀。
+    function armT(u) {
+      return Math.pow(u, .6);
     }
 
-    // 臂的直线尾段：固定“水平向下 10°”，长度足够甩出屏幕
-    const TAIL_TILT = Math.PI / 18;
-    const TAIL_LENGTH = 900;
+    // 散布随进度收紧：外侧 1，越往里越小，粒子越贴近轨道。
+    function armSpreadAt(t) {
+      const clamped = Math.min(1, Math.max(0, t));
+      return .35 + .65 * clamped;
+    }
 
-    // 臂路径：回扫段（t < approachT）+ 螺旋段（u ≤ joinT）+ 直线尾段（u > joinT），返回极坐标 { angle, radius }
-    // 回扫段：从臂的远端起点（approach 指定）到螺旋起点做屏幕空间直线回扫——直线在极坐标下就是"很陡的曲线"，
-    // 它属于臂本身：星尘、星团流、引力都沿这段走（不是额外补画的内容）。
-    function armPath(arm, t) {
-      const approachT = arm.approachT || 0;
-      if (approachT && t < approachT) {
-        const s = t / approachT;
-        const reach = arm.approach.radius * nebulaRadiusX;
-        const startX = nebulaStartRadius * Math.cos(arm.offset);
-        const startY = nebulaStartRadius * Math.sin(arm.offset) * nebulaFlatten;
-        const endX = reach * Math.cos(arm.approach.angle);
-        const endY = reach * Math.sin(arm.approach.angle) * nebulaFlatten;
-        return xyToPolar(endX + (startX - endX) * s, endY + (startY - endY) * s);
+    // 尘埃受大星与小星的平方反比引力。源有数千个，用格子分桶只算截断半径内的源。
+    function applyDustGravity(sources) {
+      const dust = [];
+      for (const star of twinklers) {
+        if (!star.dust) continue;
+        star.gx = 0;
+        star.gy = 0;
+        dust.push(star);
       }
-      const u = approachT ? (t - approachT) / (1 - approachT) : t;
-      if (u <= arm.joinT) {
-        return {
-          angle: arm.offset + u * arm.swirl,
-          radius: nebulaStartRadius + Math.pow(Math.max(u, 0), 2.35) * arm.length * (nebulaRadiusX - nebulaStartRadius),
-        };
+      if (!dust.length) return;
+
+      const cellSize = nebulaRadiusX * .1;
+      const minX = -nebulaRadiusX * 1.5;
+      const minY = -nebulaRadiusX * 1.5;
+      const cols = Math.ceil(nebulaRadiusX * 3 / cellSize);
+      const head = new Int32Array(cols * cols).fill(-1);
+      const next = new Int32Array(dust.length);
+      const xs = new Float32Array(dust.length);
+      const ys = new Float32Array(dust.length);
+      const cellIndex = (x, y) => Math.min(cols - 1, Math.max(0, Math.floor((y - minY) / cellSize))) * cols
+        + Math.min(cols - 1, Math.max(0, Math.floor((x - minX) / cellSize)));
+
+      for (let i = 0; i < dust.length; i++) {
+        const star = dust[i];
+        const progress = (star.r - nebulaStartRadius) / (nebulaRadiusX - nebulaStartRadius);
+        xs[i] = Math.cos(star.theta) * star.r + armShift(progress);
+        ys[i] = Math.sin(star.theta) * star.r;
+        const cell = cellIndex(xs[i], ys[i]);
+        next[i] = head[cell];
+        head[cell] = i;
       }
-      const k = (u - arm.joinT) / (1 - arm.joinT);
-      return xyToPolar(arm.joinX + k * TAIL_LENGTH * Math.cos(TAIL_TILT), arm.joinY + k * TAIL_LENGTH * Math.sin(TAIL_TILT));
+
+      const soft2 = Math.pow(nebulaRadiusX * .02, 2);
+      const gravityG = nebulaRadiusX * nebulaRadiusX * .00008;
+      const cutoff2 = cellSize * cellSize;
+      const pull = (sx, sy, mass) => {
+        const cx = Math.floor((sx - minX) / cellSize);
+        const cy = Math.floor((sy - minY) / cellSize);
+        for (let gy = cy - 1; gy <= cy + 1; gy++) {
+          if (gy < 0 || gy >= cols) continue;
+          for (let gx = cx - 1; gx <= cx + 1; gx++) {
+            if (gx < 0 || gx >= cols) continue;
+            for (let i = head[gy * cols + gx]; i !== -1; i = next[i]) {
+              const dx = sx - xs[i];
+              const dy = sy - ys[i];
+              const d2 = dx * dx + dy * dy;
+              if (d2 >= cutoff2) continue;
+              const dist = Math.sqrt(d2) || 1;
+              const accel = gravityG * mass / (d2 + soft2) / dist;
+              dust[i].gx += dx * accel;
+              dust[i].gy += dy * accel;
+            }
+          }
+        }
+      };
+
+      for (const source of sources) pull(source.x, source.y, 1 + source.strength * 12);
+      for (const star of twinklers) {
+        if (!star.gravity || star.dust) continue;
+        const progress = (star.r - nebulaStartRadius) / (nebulaRadiusX - nebulaStartRadius);
+        pull(Math.cos(star.theta) * star.r + armShift(progress), Math.sin(star.theta) * star.r, 1);
+      }
     }
 
     // 恒星类型加权随机：白、冰蓝、青、金、橙、红巨星、紫
@@ -158,6 +215,47 @@ window.addEventListener('load', () => {
       return sprites.star;
     }
 
+    function pickBrightStarSprite(roll) {
+      if (roll < .27) return sprites.amber;
+      if (roll < .46) return sprites.gold;
+      if (roll < .64) return sprites.red;
+      if (roll < .8) return sprites.violet;
+      return sprites.cyan;
+    }
+
+    // 自由粒子：在旋臂外侧段生成，受大星局部引力裹挟，带寿命；进入核心区即回收。
+    // scatter 越大离轨道越远；dust 为真时按尘埃表现（更暗更小）。
+    function createFreeStar(rand, scatter = 1, dust = false) {
+      const arm = nebulaArm;
+      const t = .16 + armT(rand()) * .81;
+      const angle = arm.offset + t * arm.swirl + gaussian(rand) * (.025 + t * .035) * armSpread * scatter;
+      const radius = nebulaStartRadius + Math.pow(t, .95) * arm.length * (nebulaRadiusX - nebulaStartRadius)
+        + gaussian(rand) * (5 + t * 11) * armSpread * scatter;
+      const roll = rand();
+      return {
+        a: angle, theta: angle, r: radius, homeR: radius, flatten: nebulaFlatten,
+        glow: dust ? .9 + rand() * 1.8 : 1.1 + rand() * 2.5,
+        alpha: dust ? .1 + rand() * .22 : .16 + rand() * .36,
+        sprite: dust || roll < .58 ? sprites.dust : pickStarSprite(rand()),
+        gravity: true, ox: 0, oy: 0,
+        scatter, dust,
+        gx: 0, gy: 0,
+        phase: rand() * Math.PI * 2,
+        speed: .5 + rand() * 1.7,
+        flare: !dust && rand() < .1,
+        orbSpeed: (.16 + rand() * .34) * 1.6,
+        orbPhase: rand() * Math.PI * 2,
+        orbPhase2: rand() * Math.PI * 2,
+        orbRad: (1 + rand() * 3.4) * armSpread * scatter,
+        orbTan: (1.6 + rand() * 4.6) * armSpread * scatter,
+        omega: .008 + rand() * .008,
+        vTheta: 0,
+        vr: 0,
+        age: 0,
+        life: 8 + rand() * 11.2,
+      };
+    }
+
     function generateNebula() {
       const bounds = host.getBoundingClientRect();
       const slot = letter.getBoundingClientRect();
@@ -167,7 +265,7 @@ window.addEventListener('load', () => {
       nebulaWidth = width;
       nebulaHeight = height;
       const scale = Math.max(1, Math.min(devicePixelRatio, 2, Math.sqrt(2600000 / (width * height))));
-      const density = Math.min(1.5, Math.max(.55, slot.width * slot.height * 6.5 / 150000));
+      const density = Math.min(1, Math.max(.55, slot.width * slot.height * 6.5 / 150000));
       // 星系中心对齐标题里的字母槽位
       nebulaCenterX = slot.left + slot.width / 2 - bounds.left;
       nebulaCenterY = slot.top + slot.height / 2 - bounds.top;
@@ -190,26 +288,38 @@ window.addEventListener('load', () => {
       context.setTransform(scale, 0, 0, scale, 0, 0);
 
       const rng = mulberry32(seed);
-      const radiusX = Math.max(200, slot.width * 2.05);
-      const radiusY = Math.max(150, slot.height * 1.62);
+      const radiusX = Math.max(150, slot.width * 1.21);
+      const radiusY = Math.max(128, slot.height * 1.175);
       const flatten = radiusY / radiusX;
-      const startRadius = radiusX * .13;
+      const innerRadius = radiusX * .2;
       nebulaRadiusX = radiusX;
-      nebulaStartRadius = startRadius;
+      nebulaStartRadius = innerRadius;
       nebulaFlatten = flatten;
+      nebulaRightBias = radiusX * .28;
+      nebulaWakeRadius = radiusX * .24;
+      nebulaWakeCore = radiusX * .055;
+      // 等比放大：按外臂实际到边的距离收敛，避免被画布裁掉
+      const leftRoom = nebulaCenterX / radiusX;
+      const rightRoom = (width - nebulaCenterX) / (radiusX * 1.28);
+      const verticalRoom = Math.min(nebulaCenterY, height - nebulaCenterY) / radiusY;
+      nebulaZoom = Math.max(1, Math.min(galaxyZoom, leftRoom, rightRoom, verticalRoom));
       twinklers = [];
       streams = [];
 
+      function starPoint(angle, radius, armProgress = 0) {
+        return { x: Math.cos(angle) * radius + armShift(armProgress), y: Math.sin(angle) * radius * flatten };
+      }
+
       // 星点登记：live 星进入动态层（带自己的轨道摇摆），其余烘焙进静态层。
-      function addStar(angle, radius, glow, alpha, sprite, live, wild = false, omega = 0, gravity = false) {
+      function addStar(angle, radius, glow, alpha, sprite, live, wild = false, omega = 0, gravity = false, ox = 0, oy = 0) {
         if (!live) {
-          const point = polarToXY(angle, radius);
-          blit(bakedContext, sprite, point.x, point.y, glow, alpha);
+          const point = starPoint(angle, radius);
+          blit(bakedContext, sprite, point.x + ox, point.y + oy, glow, alpha);
           return;
         }
         const wildness = wild ? 1 : .45;
         twinklers.push({
-          a: angle, theta: angle, r: radius, glow, alpha, sprite, gravity,
+          a: angle, theta: angle, r: radius, homeR: radius, flatten, glow, alpha, sprite, gravity, ox, oy,
           phase: rng() * Math.PI * 2,
           speed: .5 + rng() * 1.7,
           flare: rng() < .1,
@@ -218,22 +328,24 @@ window.addEventListener('load', () => {
           orbPhase2: rng() * Math.PI * 2,
           orbRad: (1 + rng() * 3.4) * wildness,
           orbTan: (1.6 + rng() * 4.6) * wildness,
-          omega,
+          omega: gravity ? .008 + rng() * .008 : omega,
           vTheta: 0,
           vr: 0,
         });
       }
 
-      // 中央核球：多层柔光 + 一颗核心亮星
-      blit(bakedContext, sprites.haze, 0, 0, radiusX * 1.7, .12);
-      blit(bakedContext, sprites.haze, 0, 0, radiusX * .62, .5);
-      blit(bakedContext, sprites.warmHaze, 0, 0, radiusX * .3, .28);
-      blit(bakedContext, sprites.haze, 0, 0, radiusX * .24, .85);
-      blit(bakedContext, sprites.haze, 0, 0, radiusX * .11, 1);
-      addStar(0, 0, radiusX * .2, 1, sprites.star, true);
+      // 中央核球：用笛卡尔偏移直接定位，不参与极坐标换算
+      const coreOffsetX = radiusX * -.17;
+      const coreOffsetY = radiusX * .01;
+      blit(bakedContext, sprites.haze, coreOffsetX, coreOffsetY, radiusX * 1.7, .12);
+      blit(bakedContext, sprites.haze, coreOffsetX, coreOffsetY, radiusX * .62, .5);
+      blit(bakedContext, sprites.warmHaze, coreOffsetX, coreOffsetY, radiusX * .3, .28);
+      blit(bakedContext, sprites.haze, coreOffsetX, coreOffsetY, radiusX * .24, .85);
+      blit(bakedContext, sprites.haze, coreOffsetX, coreOffsetY, radiusX * .11, 1);
+      addStar(0, 0, radiusX * .2, 1, sprites.star, true, false, 0, false, coreOffsetX, coreOffsetY);
 
       // 核球星群
-      for (let index = 0; index < Math.round(950 * density); index++) {
+      for (let index = 0; index < Math.round(950 * density * starCountScale); index++) {
         const angle = rng() * Math.PI * 2;
         const radius = Math.pow(rng(), 1.7) * radiusX * .17;
         const roll = rng();
@@ -242,195 +354,146 @@ window.addEventListener('load', () => {
           1 + rng() * 2.2,
           .14 + rng() * .55,
           pickStarSprite(roll),
-          rng() < .12
+          rng() < .12,
+          false,
+          0,
+          false,
+          coreOffsetX,
+          coreOffsetY
         );
       }
 
-      // 旋臂形态（极坐标拟合手绘轨迹）：r(t) = r₀ + t^2.35·L·(R−r₀)，θ(t) = θ₀ + t·swirl（前段紧贴核心盘绕、后段甩出）
-      // approach＝回扫段起点（angle 为弧度、radius 为 radiusX 倍数）：从该点直线回扫接入螺旋起点
-      // 内臂：桌面基准从 (−190, +72) 起（约 0.47R、151°），回扫段长约 200px＝e 的中间横线
-      // 外臂：从 (−230, +125) 起（约 0.63R、141°），回扫段长约 240px
-      const baseOffset = 1.44;
+      // 旋臂：单条极坐标螺旋，尾端停在 5 点方向。内端停在 9 点方向（迎向 12 点方向）不再向核心收拢，
+      // 避免内圈那圈急弯。
+      const tailAngle = Math.PI / 3;
+      const sweep = Math.PI * 2.8 - Math.PI / 9;
       const arms = [
-        { offset: baseOffset, swirl: -6.9, length: 1.55, bright: 1, clusters: 38, dust: 1900,
-          approachT: .12, approach: { angle: 2.63, radius: .467 } },
-        { offset: baseOffset + .26, swirl: -5.55, length: 2, bright: .5, clusters: 15, dust: 850,
-          approachT: .12, approach: { angle: 2.46, radius: .634 } },
+        { offset: tailAngle + sweep, swirl: -sweep, length: 1, bright: 1, clusters: 60, dust: 2600 },
       ];
-      nebulaArms = arms;
-
-      // 标定直尾起点：切线方向首次降到“水平向下 10°”的位置（未达到的臂保持纯螺旋）
-      for (const arm of arms) {
-        const armArc = arm.length * (radiusX - startRadius);
-        arm.joinT = 1;
-        for (let scan = .55; scan <= 1.0001; scan += .005) {
-          const angle = arm.offset + scan * arm.swirl;
-          const radius = startRadius + Math.pow(scan, 2.35) * armArc;
-          if (radius < radiusX * .65) continue;
-          const radialRate = 2.35 * Math.pow(scan, 1.35) * armArc;
-          const tangential = radius * Math.abs(arm.swirl);
-          const directionX = Math.sin(angle) * tangential + Math.cos(angle) * radialRate;
-          const directionY = flatten * (Math.sin(angle) * radialRate - Math.cos(angle) * tangential);
-          const tilt = Math.atan2(directionY, directionX);
-          if (directionX > 0 && tilt >= 0 && tilt <= Math.PI / 18) { arm.joinT = scan; break; }
-        }
-        const joinAngle = arm.offset + arm.joinT * arm.swirl;
-        const joinRadius = startRadius + Math.pow(arm.joinT, 2.35) * armArc;
-        const joinPoint = polarToXY(joinAngle, joinRadius);
-        arm.joinX = joinPoint.x;
-        arm.joinY = joinPoint.y;
-      }
+      // 烘焙层两端各留余量，让动态粒子盖住边界，避免静态贴图露馅
+      const bakedMargin = .05;
 
       for (const arm of arms) {
+        nebulaArm = arm;
         // 串珠状亮星团：整组作为一支星流，沿臂轨道向核心滑动
         for (let cluster = 0; cluster < arm.clusters; cluster++) {
-          const t = Math.min(.995, (cluster + rng() * .9) / arm.clusters);
-          const path = armPath(arm, t);
-          const point = polarToXY(path.angle, path.radius);
-          blit(bakedContext, rng() < .42 ? sprites.warmHaze : sprites.haze, point.x, point.y, (14 + rng() * 40) * (.7 + arm.bright * .5), (.05 + rng() * .07) * arm.bright);
+          const t = Math.min(.995, armT((cluster + rng() * .9) / arm.clusters));
+          const angle = arm.offset + t * arm.swirl;
+          const radius = innerRadius + Math.pow(t, .95) * arm.length * (radiusX - innerRadius);
+          const point = starPoint(angle, radius, t);
+          const hazeSprite = rng() < .42 ? sprites.warmHaze : sprites.haze;
+          const hazeSize = (17 + rng() * 46) * (.7 + arm.bright * .5);
+          const hazeAlpha = (.07 + rng() * .1) * arm.bright;
+          if (t > bakedMargin && t < 1 - bakedMargin) blit(bakedContext, hazeSprite, point.x, point.y, hazeSize, hazeAlpha);
 
           const members = [];
-          const memberCount = 5 + Math.floor(rng() * 12);
-          const spread = 2 + rng() * 5.2;
+          const memberCount = (6 + Math.floor(rng() * 13)) * starCountScale;
+          const spread = (5 + rng() * 12) * armSpread;
           for (let member = 0; member < memberCount; member++) {
             const roll = rng();
             const hero = member === 0 && rng() < .85;
             members.push({
               dt: gaussian(rng) * spread / (radiusX * .9),
               dr: gaussian(rng) * spread,
-              wobble: .4 + rng() * 1.8,
+              wobble: (.4 + rng() * 1.8) * armSpread,
               phase: rng() * Math.PI * 2,
-              glow: hero ? 9 + rng() * 11 : 2 + rng() * 3.8,
+              glow: hero ? 24 + rng() * 28 : 2 + rng() * 3.8,
               alpha: hero ? (.8 + rng() * .2) * Math.min(1, arm.bright + .15) : (.32 + rng() * .5) * arm.bright,
-              sprite: pickStarSprite(roll),
+              sprite: hero ? pickBrightStarSprite(roll) : pickStarSprite(roll),
               twkPhase: rng() * Math.PI * 2,
               twkSpeed: .5 + rng() * 1.7,
               flare: hero && rng() < .35,
             });
-            if (hero) blit(bakedContext, roll < .3 ? sprites.warmHaze : sprites.haze, point.x, point.y, 20 + rng() * 24, .1);
+            if (hero) {
+              const heroSize = 34 + rng() * 40;
+              if (t > bakedMargin && t < 1 - bakedMargin) blit(bakedContext, roll < .3 ? sprites.warmHaze : sprites.haze, point.x, point.y, heroSize, .12);
+            }
           }
           streams.push({
             offset: arm.offset, swirl: arm.swirl, length: arm.length,
-            joinT: arm.joinT, joinX: arm.joinX, joinY: arm.joinY,
-            approach: arm.approach, approachT: arm.approachT,
             t, speed: .01 + rng() * .012,
             members,
           });
         }
 
         // 臂内尘埃光带（烘焙）：作为流动粒子的轨道/约束
-        for (let index = 0; index < Math.round(arm.dust * density); index++) {
-          const t = Math.pow(rng(), .85);
-          const path = armPath(arm, t);
-          const angle = path.angle + gaussian(rng) * (.02 + t * .016);
-          const radius = path.radius + gaussian(rng) * (.8 + t * 2.6);
+        for (let index = 0; index < Math.round(arm.dust * density * starCountScale); index++) {
+          const t = bakedMargin + armT(rng()) * (1 - bakedMargin * 2);
+          const angle = arm.offset + t * arm.swirl + gaussian(rng) * (.05 + t * .04) * armSpread * armSpreadAt(t);
+          const radius = innerRadius + Math.pow(t, .95) * arm.length * (radiusX - innerRadius) + gaussian(rng) * (2.2 + t * 6.2) * armSpread * armSpreadAt(t);
           const roll = rng();
-          const point = polarToXY(angle, radius);
+          const point = starPoint(angle, radius, t);
           const sprite = roll < .08 ? sprites.gold : roll < .2 ? sprites.amber : roll < .3 ? sprites.ice : roll < .38 ? sprites.cyan : sprites.dust;
           blit(bakedContext, sprite, point.x, point.y, 1.2 + rng() * 3.2, (.15 + rng() * .5) * arm.bright);
         }
 
         // 一部分尘埃星也脱离烘焙图，沿轨道向核心流动
-        for (let index = 0; index < Math.round(arm.dust * density * .16); index++) {
+        for (let index = 0; index < Math.round(arm.dust * density * .4 * starCountScale); index++) {
           const roll = rng();
-          const beacon = rng() < .025;
+          const beacon = rng() < .025 / starCountScale;
+          // 信标大星更靠内侧生成；普通尘埃按弧长采样，避免内侧挤成一团
+          const streamT = beacon ? Math.pow(rng(), 1.7) : armT(rng());
           streams.push({
             offset: arm.offset, swirl: arm.swirl, length: arm.length,
-            joinT: arm.joinT, joinX: arm.joinX, joinY: arm.joinY,
-            approach: arm.approach, approachT: arm.approachT,
-            t: rng(),
+            t: streamT,
             speed: .008 + rng() * .014,
             members: [{
               dt: 0,
-              dr: gaussian(rng) * (.6 + rng() * 2.4),
-              wobble: .3 + rng() * 1.5,
+              dr: gaussian(rng) * (1 + rng() * 3.8) * armSpread,
+              wobble: (.3 + rng() * 1.5) * armSpread,
               phase: rng() * Math.PI * 2,
-              glow: beacon ? 10 + rng() * 10 : 1.2 + rng() * 2.8,
+              glow: beacon ? 26 + rng() * 26 : 1.2 + rng() * 2.8,
               alpha: beacon ? .55 + rng() * .3 : (.15 + rng() * .45) * arm.bright,
-              sprite: beacon ? pickStarSprite(rng()) : roll < .55 ? sprites.dust : pickStarSprite(roll),
+              sprite: beacon ? pickBrightStarSprite(rng()) : roll < .55 ? sprites.dust : pickStarSprite(roll),
               twkPhase: rng() * Math.PI * 2,
               twkSpeed: .4 + rng() * 1.4,
               flare: beacon,
             }],
           });
         }
-      }
 
-      // 盘面弥散星（带轻微自身角速度，慢慢在臂间漂移）
-      for (let index = 0; index < Math.round(1400 * density); index++) {
-        const angle = rng() * Math.PI * 2;
-        const radius = (.14 + Math.pow(rng(), .7) * .9) * radiusX;
+        // 自由小星从旋臂附近出发，由大星的局部引力维持在轨道周围。
+        for (let index = 0; index < Math.round(1700 * density * starCountScale); index++) {
+          twinklers.push(createFreeStar(rng));
+        }
+
+        // 自由尘埃：同样受引力裹挟，但离轨道更远、散布更大，构成臂外的弥散晕。
+        for (let index = 0; index < Math.round(700 * density * starCountScale); index++) {
+          twinklers.push(createFreeStar(rng, 3, true));
+        }
+      }
+      // 背景板：铺满整个 hero 的弥散星点，缓慢浮动，在最底层。
+      // 放在最后生成，避免打乱前面已有布局的随机序列。
+      backStars = [];
+      const backHalfX = Math.max(nebulaCenterX, width - nebulaCenterX) / nebulaZoom * 1.25;
+      const backHalfY = Math.max(nebulaCenterY, height - nebulaCenterY) / nebulaZoom * 1.25;
+      for (let index = 0; index < Math.round(1100 * density * starCountScale); index++) {
         const roll = rng();
-        const big = rng() < .05;
-        addStar(
-          angle, radius,
-          big ? 5.5 + rng() * 7 : 1.2 + rng() * 2.4,
-          big ? .5 + rng() * .4 : .12 + rng() * .34,
-          roll < .45 && !big ? sprites.dust : pickStarSprite(roll),
-          rng() < .5,
-          false,
-          (rng() - .5) * .012,
-          true
-        );
-      }
-
-      // 自由巡游粒子：独立绕转，最“野”的一层，覆盖星系外缘
-      for (let index = 0; index < Math.round(2200 * density); index++) {
-        const angle = rng() * Math.PI * 2;
-        const radius = (.16 + Math.pow(rng(), .72) * 1.3) * radiusX;
-        const big = rng() < .08;
-        const sprite = big ? pickStarSprite(rng()) : rng() < .3 ? sprites.dust : pickStarSprite(rng());
-        addStar(
-          angle, radius,
-          big ? 6.5 + rng() * 8 : 1.6 + rng() * 2.8,
-          big ? .55 + rng() * .4 : .16 + rng() * .38,
-          sprite,
-          true,
-          true,
-          (rng() - .5) * .02,
-          true
-        );
-      }
-
-      // 外缘孤星
-      for (let index = 0; index < Math.round(130 * density); index++) {
-        const angle = rng() * Math.PI * 2;
-        const radius = radiusX * (.78 + rng() * .4);
-        addStar(
-          angle, radius,
-          3 + rng() * 4.6,
-          .3 + rng() * .5,
-          pickStarSprite(rng()),
-          true
-        );
-      }
-
-      // 旋入粒子：最外端生成，向内盘旋加速，贴近核心时淡出消失
-      inflows = [];
-      for (let index = 0; index < Math.round(280 * density); index++) {
-        inflows.push({
-          progress: rng(),
-          speed: .05 + rng() * .055,
-          startAngle: rng() * Math.PI * 2,
-          startRadius: radiusX * (.98 + rng() * .07),
-          endRadius: radiusX * (.02 + rng() * .03),
-          sweep: 3 + rng() * 3.2,
-          wobble: .6 + rng() * 1.6,
-          phase: rng() * Math.PI * 2,
-          glow: 1.7 + rng() * 2.4,
-          alpha: .45 + rng() * .45,
-          sprite: pickStarSprite(rng()),
+        backStars.push({
+          x: (rng() * 2 - 1) * backHalfX,
+          y: (rng() * 2 - 1) * backHalfY,
+          glow: 1 + rng() * 1.8,
+          alpha: .12 + rng() * .3,
+          sprite: roll < .5 ? sprites.dust : pickStarSprite(rng()),
+          amp: .8 + rng() * 2.6,
+          sp: .12 + rng() * .3,
+          ph: rng() * Math.PI * 2,
+          ph2: rng() * Math.PI * 2,
+          tw: .4 + rng() * 1.4,
+          tph: rng() * Math.PI * 2,
         });
       }
+      inflows = [];
     }
 
     function draw(time) {
       const delta = lastTime ? Math.min((time - lastTime) / 1000, .05) : 0;
       lastTime = time;
       if (!paused && !document.hidden) {
-        elapsed += delta;
+        const motionDelta = delta * motionSpeed;
+        elapsed += motionDelta;
         for (const particle of inflows) {
-          particle.progress += particle.speed * delta;
+          particle.progress += particle.speed * motionDelta;
           if (particle.progress >= 1) {
             particle.progress -= 1;
             particle.startAngle = Math.random() * Math.PI * 2;
@@ -440,36 +503,102 @@ window.addEventListener('load', () => {
           }
         }
         for (const stream of streams) {
-          stream.t -= stream.speed * delta;
+          stream.t -= stream.speed * motionDelta;
           if (stream.t <= 0) {
             stream.t += 1;
             stream.speed = .01 + Math.random() * .012;
             for (const member of stream.members) member.phase = Math.random() * Math.PI * 2;
           }
         }
-        // 旋臂引力：法向拉向臂心线 + 沿臂向核心牵引，让自由星自然聚拢、沿臂流动
-        const damp = Math.pow(.99, delta * 60);
-        const tau = Math.PI * 2;
-        for (const star of twinklers) {
-          if (!star.gravity) continue;
-          let torque = 0;
-          let pull = 0;
-          for (const arm of nebulaArms) {
-            const arc = arm.length * (nebulaRadiusX - nebulaStartRadius);
-            const u = Math.min(1, Math.max(0, Math.pow((star.r - nebulaStartRadius) / arc, 1 / 2.35)));
-            const approachT = arm.approachT || 0;
-            let dTheta = star.theta - armPath(arm, approachT + (1 - approachT) * u).angle;
-            dTheta -= Math.round(dTheta / tau) * tau;
-            const distance = Math.abs(dTheta) * star.r;
-            if (distance > 240) continue;
-            const falloff = Math.exp(-(distance * distance) / 14000);
-            torque += (-.95 * dTheta + .06) * falloff * arm.bright;
-            pull += -.4 * falloff * arm.bright;
+        // 局部群集力与中心引力共同约束小星，径向锚避免长期向核心塌缩。
+        const damp = Math.pow(.992, motionDelta * 60);
+        const wakeSources = [];
+        for (const stream of streams) {
+          const base = stream.t;
+          const clusterSpread = armSpreadAt(base);
+          for (const member of stream.members) {
+            if (member.glow < 10) continue;
+            const progress = base + member.dt * clusterSpread;
+            if (progress <= 0 || progress >= 1) continue;
+            const angle = stream.offset + progress * stream.swirl;
+            const radius = nebulaStartRadius + Math.pow(progress, .95) * stream.length * (nebulaRadiusX - nebulaStartRadius) + member.dr * clusterSpread;
+            const radialSlope = .95 * Math.pow(progress, -.05) * stream.length * (nebulaRadiusX - nebulaStartRadius);
+            const shiftSlope = 6 * progress * (1 - progress) * nebulaRightBias;
+            const dxdt = -Math.sin(angle) * stream.swirl * radius + Math.cos(angle) * radialSlope + shiftSlope;
+            const dydt = Math.cos(angle) * stream.swirl * radius + Math.sin(angle) * radialSlope;
+            wakeSources.push({
+              x: Math.cos(angle) * radius + armShift(progress),
+              y: Math.sin(angle) * radius,
+              vx: -stream.speed * dxdt,
+              vy: -stream.speed * dydt,
+              strength: Math.min(1.4, member.glow / 24),
+            });
           }
-          star.vTheta = (star.vTheta + torque * delta) * damp;
-          star.vr = (star.vr + pull * delta) * damp;
-          star.theta += (star.omega + star.vTheta) * delta;
-          star.r = Math.min(nebulaRadiusX * 1.5, Math.max(nebulaStartRadius * .6, star.r + star.vr * delta));
+        }
+        applyDustGravity(wakeSources);
+        const wakeRadius2 = nebulaWakeRadius * nebulaWakeRadius;
+        const coreClearRadius = nebulaStartRadius * 1.4;
+        for (let index = 0; index < twinklers.length; index++) {
+          const star = twinklers[index];
+          if (!star.gravity) continue;
+          const cosT = Math.cos(star.theta);
+          const sinT = Math.sin(star.theta);
+          const armProgress = (star.r - nebulaStartRadius) / (nebulaRadiusX - nebulaStartRadius);
+          const sx = cosT * star.r + armShift(armProgress);
+          const sy = sinT * star.r;
+          let tangentSpeed = 0;
+          let totalWeight = 0;
+          let localVr = 0;
+          let localVt = 0;
+          for (const source of wakeSources) {
+            const dx = source.x - sx;
+            const dy = source.y - sy;
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= wakeRadius2) continue;
+            const distance = Math.sqrt(d2) || 1;
+            const edge = 1 - d2 / wakeRadius2;
+            const weight = edge * edge * source.strength;
+            tangentSpeed += (source.vx * -sinT + source.vy * cosT) * weight;
+            totalWeight += weight;
+            // 只保留向大星靠拢的局部吸引，中心处平滑降为零。
+            const force = Math.min(15, distance / nebulaWakeCore * 7) * edge;
+            const fx = dx / distance * force * source.strength;
+            const fy = dy / distance * force * source.strength;
+            localVr += fx * cosT + fy * sinT;
+            localVt += fx * -sinT + fy * cosT;
+          }
+          const radius = Math.max(star.r, 12);
+          if (totalWeight > 0) {
+            const targetOmega = tangentSpeed / totalWeight / radius;
+            const coupling = Math.min(3, totalWeight * 1.4) * motionDelta;
+            star.vTheta += (targetOmega - star.omega - star.vTheta) * coupling;
+            const localForce = Math.hypot(localVr, localVt);
+            const forceLimit = localForce > 24 ? 24 / localForce : 1;
+            star.vr += localVr * forceLimit * motionDelta;
+            star.vTheta += localVt * forceLimit / radius * motionDelta;
+          }
+          // 尘埃额外受大星与小星的平方反比引力（wake 负责裹挟流动，这里补引力本身）
+          if (star.dust) {
+            const gravityForce = Math.hypot(star.gx, star.gy);
+            const gravityLimit = gravityForce > 24 ? 24 / gravityForce : 1;
+            star.vr += (star.gx * cosT + star.gy * sinT) * gravityLimit * motionDelta;
+            star.vTheta += (star.gx * -sinT + star.gy * cosT) * gravityLimit / radius * motionDelta;
+          }
+          const centralSoftening = nebulaRadiusX * .18;
+          const centralDistance2 = star.r * star.r + centralSoftening * centralSoftening;
+          const centralPull = nebulaRadiusX * nebulaRadiusX * .14 * star.r / Math.pow(centralDistance2, 1.5);
+          star.vr -= centralPull * motionDelta;
+          // 径向弹簧只抵消长期内落，不把星锁死；外圈同样维持运动
+          star.vr += (star.homeR - star.r) * .45 * motionDelta;
+          star.vTheta *= damp;
+          star.vr *= damp;
+          star.theta += (star.omega + star.vTheta) * motionDelta;
+          star.r = Math.min(nebulaRadiusX * 1.5, Math.max(nebulaStartRadius * .6, star.r + star.vr * motionDelta));
+          // 被中心引力拖进核心、或活得超过寿命的自由小星，回收重投。
+          star.age += motionDelta;
+          if (star.age >= star.life || star.r <= coreClearRadius) {
+            twinklers[index] = createFreeStar(Math.random, star.scatter, star.dust);
+          }
         }
       }
       pointer.x += (pointer.targetX - pointer.x) * .05;
@@ -484,19 +613,36 @@ window.addEventListener('load', () => {
       context.clearRect(0, 0, width, height);
       context.save();
       context.globalCompositeOperation = 'lighter';
-      // 星系固定不旋转，保证 e 形开口始终朝下（仅保留指针位移视差与入场缩放）
+      // 字形固定不转：转动感完全交给星星沿螺旋的流动
       context.translate(nebulaCenterX + pointer.x * 10, nebulaCenterY + pointer.y * 8);
-      context.scale(.78 + .22 * ease, .78 + .22 * ease);
+      // 整体等比放大：臂宽、星点尺寸、间距一起缩，保持比例
+      const zoom = nebulaZoom * (.78 + .22 * ease);
+      context.scale(zoom, zoom);
+      // 背景板：铺满 hero 的弥散星点，只做缓慢浮动与呼吸，位于所有内容之下
+      for (const star of backStars) {
+        const driftX = Math.sin(elapsed * star.sp + star.ph) * star.amp;
+        const driftY = Math.cos(elapsed * star.sp * .8 + star.ph2) * star.amp;
+        const pulse = Math.sin(elapsed * star.tw + star.tph);
+        const glow = star.glow * (1 + pulse * .2);
+        const x = star.x + driftX;
+        const y = star.y + driftY;
+        context.globalAlpha = Math.min(1, masterAlpha * star.alpha * (.6 + pulse * .3));
+        context.drawImage(star.sprite, x - glow / 2, y - glow / 2, glow, glow);
+      }
+
       // 烘焙层：最底层轨道纹理（以 hero 坐标绘制，按星系中心偏移贴回）
       context.globalAlpha = masterAlpha * .65;
       context.drawImage(baked, -nebulaCenterX, -nebulaCenterY, width, height);
 
       for (const star of twinklers) {
         const wobble = elapsed * star.orbSpeed + star.orbPhase;
+        const starSpread = armSpreadAt((star.r - nebulaStartRadius) / (nebulaRadiusX - nebulaStartRadius));
         const baseAngle = star.gravity ? star.theta : star.a + elapsed * star.omega;
-        const angle = baseAngle + star.orbTan * Math.sin(wobble * 1.37 + star.orbPhase2) / Math.max(star.r, 36);
-        const radius = star.r + star.orbRad * Math.sin(wobble);
-        const { x, y } = polarToXY(angle, radius);
+        const angle = baseAngle + star.orbTan * starSpread * Math.sin(wobble * 1.37 + star.orbPhase2) / Math.max(star.r, 36);
+        const radius = star.r + star.orbRad * starSpread * Math.sin(wobble);
+        const armProgress = (radius - nebulaStartRadius) / (nebulaRadiusX - nebulaStartRadius);
+        const x = Math.cos(angle) * radius + (star.gravity ? armShift(armProgress) : 0) + star.ox;
+        const y = Math.sin(angle) * radius * star.flatten + star.oy;
         const pulse = Math.sin(elapsed * star.speed + star.phase);
         const glow = star.glow * (1 + pulse * .14);
         if (star.flare) blit(context, sprites.flare, x, y, glow * 2.8, Math.min(1, masterAlpha * star.alpha * (.22 + pulse * .1) * 1.25));
@@ -507,17 +653,25 @@ window.addEventListener('load', () => {
       // 旋臂星流：沿臂（轨道）旋转着滑向核心，核心处淡出、外端重生
       for (const stream of streams) {
         const t = stream.t;
+        const clusterSpread = armSpreadAt(t);
         for (const member of stream.members) {
-          const progress = t + member.dt;
-          const fade = Math.min(progress / .07, 1) * Math.min((1 - progress) / .08, 1);
+          const progress = t + member.dt * clusterSpread;
+          // 大星在外端更晚淡入，相当于更内侧才出现
+          const outerFade = member.glow >= 10 ? .3 : .08;
+          const fade = Math.min(progress / .035, 1) * Math.min((1 - progress) / outerFade, 1);
           if (fade <= 0) continue;
-          const path = armPath(stream, progress);
-          const radius = path.radius + member.dr + member.wobble * Math.sin(elapsed * 1.1 + member.phase);
-          const { x, y } = polarToXY(path.angle, radius);
+          const brightStarFade = member.glow >= 10 ? cubicBezierEase(progress / .32) : 1;
+          const angle = stream.offset + progress * stream.swirl;
+          const radius = nebulaStartRadius + Math.pow(Math.max(progress, 0), .95) * stream.length * (nebulaRadiusX - nebulaStartRadius)
+            + member.dr * clusterSpread + member.wobble * clusterSpread * Math.sin(elapsed * 1.1 + member.phase);
+          const x = Math.cos(angle) * radius + armShift(progress);
+          const y = Math.sin(angle) * radius * nebulaFlatten;
           const pulse = Math.sin(elapsed * member.twkSpeed + member.twkPhase);
-          const glow = member.glow * (1 + pulse * .14);
-          if (member.flare) blit(context, sprites.flare, x, y, glow * 2.8, Math.min(1, masterAlpha * member.alpha * fade * (.22 + pulse * .1) * 1.25));
-          context.globalAlpha = Math.min(1, masterAlpha * member.alpha * fade * (.68 + pulse * .32) * 1.25);
+          const pulseScale = member.glow >= 10 ? .05 : .14;
+          const glow = member.glow * (1 + pulse * pulseScale) * (.3 + brightStarFade * .7);
+          const alpha = member.alpha * fade * brightStarFade * brightStarFade;
+          if (member.flare) blit(context, sprites.flare, x, y, glow * 2.8, Math.min(1, masterAlpha * alpha * (.22 + pulse * .1) * 1.25));
+          context.globalAlpha = Math.min(1, masterAlpha * alpha * (.68 + pulse * .32) * 1.25);
           context.drawImage(member.sprite, x - glow / 2, y - glow / 2, glow, glow);
         }
       }
@@ -532,7 +686,8 @@ window.addEventListener('load', () => {
           const radius = particle.startRadius + (particle.endRadius - particle.startRadius) * Math.pow(progress, 1.35)
             + particle.wobble * Math.sin(elapsed * 1.3 + particle.phase + sample);
           const angle = particle.startAngle + particle.sweep * Math.pow(progress, 1.5);
-          const { x, y } = polarToXY(angle, radius);
+          const x = Math.cos(angle) * radius;
+          const y = Math.sin(angle) * radius * particle.flatten;
           const tailScale = sample === 0 ? 1 : sample === 1 ? .38 : .15;
           const glow = particle.glow * (1 - sample * .2);
           context.globalAlpha = Math.min(1, masterAlpha * particle.alpha * fade * tailScale * 1.2);
@@ -582,6 +737,9 @@ window.addEventListener('load', () => {
     });
 
     resetButton.addEventListener('click', resetNebula);
+    speedControl.addEventListener('input', () => {
+      motionSpeed = Number(speedControl.value);
+    });
     reducedMotion.addEventListener('change', () => {
       paused = reducedMotion.matches;
       updatePause();

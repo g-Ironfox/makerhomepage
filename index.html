@@ -27,6 +27,10 @@
           <a class="explore" href="#about"><span class="scroll-line"></span>好奇心，从这里开始 <i data-lucide="arrow-down"></i></a>
           <div class="scene-controls">
             <span class="live-label"><span></span> A LITTLE UNIVERSE</span>
+            <label class="speed-control" for="speed">
+              <i data-lucide="gauge"></i>
+              <input id="speed" type="range" min="0.25" max="1" value="0.55" step="0.05" aria-label="星系运动速度" title="星系运动速度" />
+            </label>
             <button id="pause" type="button" aria-label="暂停动画" title="暂停动画" aria-pressed="false"><i data-lucide="pause"></i></button>
             <button id="reset" type="button" aria-label="重置星系" title="重置星系"><i data-lucide="rotate-ccw"></i></button>
           </div>
