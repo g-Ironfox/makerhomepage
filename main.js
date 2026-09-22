@@ -39,7 +39,7 @@ window.addEventListener('load', () => {
     let nebulaCenterX = 0;
     let nebulaCenterY = 0;
     let introStart = 0;
-    const pointer = { x: 0, y: 0, targetX: 0, targetY: 0 };
+    const pointer = { x: 0, y: 0, targetX: 0, targetY: 0, active: false, strength: 0 };
 
     function armShift(t) {
       const progress = Math.min(1, Math.max(0, t));
@@ -499,6 +499,17 @@ window.addEventListener('load', () => {
     function draw(time) {
       const delta = lastTime ? Math.min((time - lastTime) / 1000, .05) : 0;
       lastTime = time;
+
+      // 鼠标引力：把指针换算到星系物理坐标系（折回画布平移与视差），并平滑启停
+      const introProgress = reducedMotion.matches ? 1 : Math.min(Math.max((time - introStart) / 1700, 0), 1);
+      const easeNow = introProgress * introProgress * (3 - 2 * introProgress);
+      const zoomNow = nebulaZoom * (.78 + .22 * easeNow);
+      pointer.strength += ((pointer.active ? 1 : 0) - pointer.strength) * .05;
+      const cursorX = ((pointer.x + .5) * nebulaWidth - (nebulaCenterX + pointer.x * 10)) / zoomNow;
+      const cursorY = ((pointer.y + .5) * nebulaHeight - (nebulaCenterY + pointer.y * 8)) / zoomNow / nebulaFlatten;
+      const cursorPull = pointer.strength > .02;
+      const cursorRadius2 = Math.pow(nebulaRadiusX * .45, 2);
+
       if (!paused && !document.hidden) {
         const motionDelta = delta * motionSpeed;
         elapsed += motionDelta;
@@ -577,6 +588,22 @@ window.addEventListener('load', () => {
             localVr += fx * cosT + fy * sinT;
             localVt += fx * -sinT + fy * cosT;
           }
+          // 鼠标排斥速度：按距离给出基准推开速度，直接把星点速度往这个速度上带（不再走力的形式）
+          if (cursorPull) {
+            const mdx = cursorX - sx;
+            const mdy = cursorY - sy;
+            const md2 = mdx * mdx + mdy * mdy;
+            if (md2 < cursorRadius2) {
+              const mdist = Math.sqrt(md2) || 1;
+              const speed = (1 - md2 / cursorRadius2) * nebulaRadiusX * .05 * pointer.strength;
+              const pushX = -mdx / mdist * speed;
+              const pushY = -mdy / mdist * speed;
+              const starRadius = Math.max(star.r, 12);
+              const grip = Math.min(1, 4 * motionDelta);
+              star.vr += (pushX * cosT + pushY * sinT - star.vr) * grip;
+              star.vTheta += ((pushX * -sinT + pushY * cosT) / starRadius - star.vTheta) * grip;
+            }
+          }
           const radius = Math.max(star.r, 12);
           if (totalWeight > 0) {
             const targetOmega = tangentSpeed / totalWeight / radius;
@@ -614,8 +641,7 @@ window.addEventListener('load', () => {
       pointer.x += (pointer.targetX - pointer.x) * .05;
       pointer.y += (pointer.targetY - pointer.y) * .05;
 
-      const intro = reducedMotion.matches ? 1 : Math.min(Math.max((time - introStart) / 1700, 0), 1);
-      const ease = intro * intro * (3 - 2 * intro);
+      const ease = easeNow;
       const masterAlpha = .15 + .85 * ease;
       const width = nebulaWidth;
       const height = nebulaHeight;
@@ -735,10 +761,12 @@ window.addEventListener('load', () => {
         const bounds = hero.getBoundingClientRect();
         pointer.targetX = (event.clientX - bounds.left) / bounds.width - .5;
         pointer.targetY = (event.clientY - bounds.top) / bounds.height - .5;
+        pointer.active = true;
       });
       hero.addEventListener('pointerleave', () => {
         pointer.targetX = 0;
         pointer.targetY = 0;
+        pointer.active = false;
       });
       introStart = performance.now();
       animationFrame = requestAnimationFrame(draw);
