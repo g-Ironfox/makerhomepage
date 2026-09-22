@@ -24,6 +24,8 @@ window.addEventListener('load', () => {
     let nebulaHeight = 0;
     let twinklers = [];
     let backStars = [];
+    let backHalfX = 0;
+    let backHalfY = 0;
     let inflows = [];
     let streams = [];
     let nebulaRadiusX = 0;
@@ -138,6 +140,10 @@ window.addEventListener('load', () => {
     function armSpreadAt(t) {
       const clamped = Math.min(1, Math.max(0, t));
       return .35 + .65 * clamped;
+    }
+
+    function wrapSpan(value, span) {
+      return ((value % span) + span) % span;
     }
 
     // 尘埃受大星与小星的平方反比引力。源有数千个，用格子分桶只算截断半径内的源。
@@ -465,13 +471,17 @@ window.addEventListener('load', () => {
       // 背景板：铺满整个 hero 的弥散星点，缓慢浮动，在最底层。
       // 放在最后生成，避免打乱前面已有布局的随机序列。
       backStars = [];
-      const backHalfX = Math.max(nebulaCenterX, width - nebulaCenterX) / nebulaZoom * 1.25;
-      const backHalfY = Math.max(nebulaCenterY, height - nebulaCenterY) / nebulaZoom * 1.25;
-      for (let index = 0; index < Math.round(1100 * density * starCountScale); index++) {
+      backHalfX = Math.max(nebulaCenterX, width - nebulaCenterX) / nebulaZoom * 1.25;
+      backHalfY = Math.max(nebulaCenterY, height - nebulaCenterY) / nebulaZoom * 1.25;
+      for (let index = 0; index < Math.round(1210 * density * starCountScale); index++) {
         const roll = rng();
+        const drift = 1.5 + rng() * 4;
+        const driftAngle = rng() * Math.PI * 2;
         backStars.push({
           x: (rng() * 2 - 1) * backHalfX,
           y: (rng() * 2 - 1) * backHalfY,
+          vx: Math.cos(driftAngle) * drift,
+          vy: Math.sin(driftAngle) * drift,
           glow: 1 + rng() * 1.8,
           alpha: .12 + rng() * .3,
           sprite: roll < .5 ? sprites.dust : pickStarSprite(rng()),
@@ -618,14 +628,17 @@ window.addEventListener('load', () => {
       // 整体等比放大：臂宽、星点尺寸、间距一起缩，保持比例
       const zoom = nebulaZoom * (.78 + .22 * ease);
       context.scale(zoom, zoom);
-      // 背景板：铺满 hero 的弥散星点，只做缓慢浮动与呼吸，位于所有内容之下
+      // 背景板：铺满 hero 的弥散星点，缓慢漂移 + 浮动 + 呼吸，位于所有内容之下
+      const backSpanX = backHalfX * 2;
+      const backSpanY = backHalfY * 2;
       for (const star of backStars) {
-        const driftX = Math.sin(elapsed * star.sp + star.ph) * star.amp;
-        const driftY = Math.cos(elapsed * star.sp * .8 + star.ph2) * star.amp;
+        const driftX = star.vx * elapsed + Math.sin(elapsed * star.sp + star.ph) * star.amp;
+        const driftY = star.vy * elapsed + Math.cos(elapsed * star.sp * .8 + star.ph2) * star.amp;
         const pulse = Math.sin(elapsed * star.tw + star.tph);
         const glow = star.glow * (1 + pulse * .2);
-        const x = star.x + driftX;
-        const y = star.y + driftY;
+        // 越界后从另一侧绕回，绕回线落在可见区域之外
+        const x = wrapSpan(star.x + driftX + backHalfX, backSpanX) - backHalfX + pointer.x * 6.6;
+        const y = wrapSpan(star.y + driftY + backHalfY, backSpanY) - backHalfY + pointer.y * 5.5;
         context.globalAlpha = Math.min(1, masterAlpha * star.alpha * (.6 + pulse * .3));
         context.drawImage(star.sprite, x - glow / 2, y - glow / 2, glow, glow);
       }
