@@ -36,6 +36,22 @@ h1 > span:first-child, h1 > span:last-child { font-size: .7em; }
 .speed-control input { width: 72px; margin: 0; accent-color: #bddff4; cursor: pointer; }
 button { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; border: 1px solid #ffffff20; background: #ffffff05; color: #b8bec3; cursor: pointer; transition: background .2s, color .2s; }
 button:hover { background: #ffffff16; color: #fff; }
+.logo-study { position: relative; height: min(900px, 100svh); min-height: 640px; padding: 42px 56px 34px; display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; background: #e9e7df; color: #171b19; }
+.logo-study::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .3; background-image: radial-gradient(#8f918b .55px, transparent .55px); background-size: 7px 7px; }
+.logo-study-heading, .logo-study-footer { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.logo-study-heading { padding-bottom: 24px; border-bottom: 1px solid #171b1924; }
+.logo-study-heading > span, .logo-study-footer > span { color: #666b65; font-size: 10px; }
+.logo-study-heading h2 { font: 700 14px/1 Georgia, serif; }
+.logo-stage { position: relative; min-height: 0; overflow: hidden; }
+.logo-stage::before, .logo-stage::after { content: ""; position: absolute; top: 50%; left: 50%; width: min(70vw, 68vh, 650px); aspect-ratio: 1; translate: -50% -50%; border: 1px solid #171b1914; border-radius: 50%; pointer-events: none; }
+.logo-stage::after { width: min(79vw, 77vh, 735px); border-style: dashed; }
+#logo-scene { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+.logo-study-footer { padding-top: 24px; border-top: 1px solid #171b1924; }
+.logo-controls { display: flex; gap: 10px; }
+.logo-controls button { border-color: #171b1938; background: transparent; color: #171b19; }
+.logo-controls button:hover { background: #171b19; color: #e9e7df; }
+.logo-controls button:focus-visible { outline-color: #9e5034; }
+.logo-error { position: absolute; inset: 50% auto auto 50%; translate: -50% -50%; color: #9e5034; font-size: 13px; }
 .about { padding: 46px 56px 28px; background: #101315; border-top: 1px solid #ffffff12; }
 .section-label { display: flex; justify-content: space-between; color: #8c959b; font-size: 10px; }
 .about-content { max-width: 1180px; margin: 132px auto 148px; display: grid; grid-template-columns: 1fr 1fr; gap: 110px; align-items: center; }
@@ -45,6 +61,6 @@ h2 { font-size: 58px; font-weight: 400; line-height: 1.45; margin: 0; }
 footer { display: flex; justify-content: space-between; border-top: 1px solid #ffffff14; padding-top: 23px; font-size: 11px; color: #8c959b; }
 footer a { display: flex; align-items: center; gap: 8px; }
 @media (max-width: 1000px) { h1 { font-size: 168px; gap: .6em; } }
-@media (max-width: 700px) { header { padding: 25px 24px; } .hero { min-height: 560px; } h1 { font-size: 108px; gap: .36em; } .manifesto { margin-top: 128px; font-size: 11px; letter-spacing: 0; } .hero-footer { left: 24px; right: 24px; bottom: 25px; } .live-label { display: none; } .speed-control { width: 82px; } .speed-control input { width: 58px; } .explore { gap: 10px; font-size: 10px; } .scroll-line { width: 15px; } .about { padding: 30px 24px 22px; } .section-label > span:last-child { display: none; } .about-content { margin: 66px 0; grid-template-columns: 1fr; gap: 38px; } h2 { font-size: 40px; } .about-content p { font-size: 14px; } }
+@media (max-width: 700px) { header { padding: 25px 24px; } .hero { min-height: 560px; } h1 { font-size: 108px; gap: .36em; } .manifesto { margin-top: 128px; font-size: 11px; letter-spacing: 0; } .hero-footer { left: 24px; right: 24px; bottom: 25px; } .live-label { display: none; } .speed-control { width: 82px; } .speed-control input { width: 58px; } .explore { gap: 10px; font-size: 10px; } .scroll-line { width: 15px; } .logo-study { height: 78svh; min-height: 560px; padding: 28px 24px 24px; } .logo-study-heading > span:last-child { display: none; } .logo-stage::before { width: 88vw; } .logo-stage::after { width: 102vw; } .about { padding: 30px 24px 22px; } .section-label > span:last-child { display: none; } .about-content { margin: 66px 0; grid-template-columns: 1fr; gap: 38px; } h2 { font-size: 40px; } .about-content p { font-size: 14px; } }
 @media (max-width: 390px) { h1 { font-size: 92px; gap: .24em; } .club-label { padding-left: 14px; } header { gap: 14px; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

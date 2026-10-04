@@ -6,9 +6,9 @@
     <meta name="theme-color" content="#080b0e" />
     <meta name="description" content="Maker 社团。好奇、探索、动手，把想法变成现实。" />
     <title>maker — 把想法，变成现实</title>
-    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./style.css?v=20261004" />
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
-    <script src="./main.js" defer></script>
+    <script src="./main.js?v=20261004" defer></script>
   </head>
   <body>
     <main>
@@ -36,8 +36,27 @@
           </div>
         </div>
       </section>
+      <section id="logo-study" class="logo-study" aria-labelledby="logo-study-title">
+        <div class="logo-study-heading">
+          <span>01 / PARTICLE MARK</span>
+          <h2 id="logo-study-title">SCU MAKER</h2>
+          <span>移动指针扰动粒子</span>
+        </div>
+        <div class="logo-stage" id="logo-stage">
+          <canvas id="logo-scene" aria-hidden="true"></canvas>
+          <p class="logo-error" id="logo-error" hidden>无法加载粒子标志。</p>
+        </div>
+        <div class="logo-study-footer">
+          <span>点击画面使粒子散开</span>
+          <div class="logo-controls">
+            <button id="logo-pause" type="button" aria-label="暂停粒子动画" title="暂停粒子动画" aria-pressed="false"><i data-lucide="pause"></i></button>
+            <button id="logo-scatter" type="button" aria-label="散开粒子" title="散开粒子"><i data-lucide="sparkles"></i></button>
+            <button id="logo-reset" type="button" aria-label="重新聚合粒子" title="重新聚合粒子"><i data-lucide="rotate-ccw"></i></button>
+          </div>
+        </div>
+      </section>
       <section id="about" class="about">
-        <div class="section-label"><span>01 / ABOUT US</span><span>想象没有边界，创造不止于此。</span></div>
+        <div class="section-label"><span>02 / ABOUT US</span><span>想象没有边界，创造不止于此。</span></div>
         <div class="about-content"><h2>把想法，<br />变成现实。</h2><div><p>我们是一群喜欢追问「为什么」，<br />也愿意动手试试「能不能」的人。</p><p>从第一行代码，到第一个原型。<br />在 Maker，让好奇心找到同伴，<br />让脑海里的火花，成为真实的作品。</p><span class="about-signature">STAY CURIOUS. MAKE SOMETHING.</span></div></div>
         <footer><span>maker / 创客社团</span><a href="#">回到星系 <i data-lucide="arrow-up-right"></i></a></footer>
       </section>

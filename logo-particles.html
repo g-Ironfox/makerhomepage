@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SCU Maker · 粒子标志</title>
+  <style>
+    :root { color-scheme: light; --paper: #f5f3ec; --ink: #181b1a; --accent: #b05a37; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body { overflow: hidden; background: var(--paper); color: var(--ink); font-family: Georgia, "Noto Serif SC", serif; }
+    body::before { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .34; background-image: radial-gradient(#a5a39a 0.55px, transparent 0.55px); background-size: 7px 7px; }
+    .page { position: relative; width: 100%; min-height: 100%; min-height: 100svh; display: flex; flex-direction: column; }
+    header, footer { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 28px clamp(24px, 5vw, 80px); }
+    header { border-bottom: 1px solid #272a2821; }
+    .wordmark { font: 700 15px/1.1 Georgia, serif; letter-spacing: .13em; }
+    .wordmark span { color: var(--accent); }
+    .meta, .hint { font: 12px/1.5 "Microsoft YaHei", sans-serif; letter-spacing: .12em; color: #656963; }
+    .stage { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; }
+    .stage::before, .stage::after { content: ""; position: absolute; width: min(78vw, 70vh, 680px); aspect-ratio: 1; border: 1px solid #282c2814; border-radius: 50%; pointer-events: none; }
+    .stage::after { width: min(88vw, 79vh, 770px); border-style: dashed; border-color: #282c2810; }
+    canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+    footer { border-top: 1px solid #272a2821; }
+    .controls { display: flex; align-items: center; gap: 8px; }
+    button { height: 38px; padding: 0 14px; border: 1px solid #252a252f; border-radius: 4px; background: transparent; color: var(--ink); font: 12px "Microsoft YaHei", sans-serif; cursor: pointer; transition: background .2s, color .2s, border-color .2s; }
+    button:hover { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .primary { background: var(--ink); color: var(--paper); }
+    .primary:hover { background: var(--accent); border-color: var(--accent); }
+    .error { position: absolute; z-index: 3; max-width: 80%; text-align: center; font: 14px/1.7 "Microsoft YaHei", sans-serif; color: var(--accent); }
+    @media (max-width: 600px) {
+      header, footer { padding: 18px 20px; }
+      .meta { font-size: 10px; }
+      footer { flex-wrap: wrap; }
+      .hint { width: 100%; font-size: 11px; }
+      .stage::before { width: 90vw; }
+      .stage::after { width: 105vw; }
+    }
+    @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header><div class="wordmark">SCU <span>·</span> MAKER</div><div class="meta">PARTICLE STUDY / 001</div></header>
+    <main class="stage" id="stage" aria-label="SCU Maker 标志粒子互动动画">
+      <canvas id="scene" aria-hidden="true"></canvas>
+      <noscript><p class="error">请启用 JavaScript 以查看粒子动画。</p></noscript>
+    </main>
+    <footer>
+      <div class="hint">移动指针扰动粒子 · 点击画面使其散开</div>
+      <div class="controls">
+        <button type="button" id="pause" aria-label="暂停动画" aria-pressed="false">暂停</button>
+        <button type="button" id="scatter">散开</button>
+        <button type="button" id="reset" class="primary">重新聚合</button>
+      </div>
+    </footer>
+  </div>
+  <script>
+    (() => {
+      const stage = document.getElementById('stage');
+      const canvas = document.getElementById('scene');
+      const ctx = canvas.getContext('2d');
+      const pauseButton = document.getElementById('pause');
+      const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const pointer = { x: -1000, y: -1000, active: false };
+      const particles = [];
+      let width = 0;
+      let height = 0;
+      let scale = 1;
+      let paused = false;
+      let frame = 0;
+
+      function resize() {
+        const bounds = stage.getBoundingClientRect();
+        const ratio = Math.min(devicePixelRatio || 1, 2);
+        width = bounds.width;
+        height = bounds.height;
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        scale = Math.min(width * .86, height * .88, 620) / 640;
+        for (const particle of particles) {
+          particle.homeX = width / 2 + (particle.sourceX - 320) * scale;
+          particle.homeY = height / 2 + (particle.sourceY - 320) * scale;
+          if (particle.x === undefined) {
+            particle.x = reducedMotion ? particle.homeX : width / 2 + (Math.random() - .5) * width * 1.4;
+            particle.y = reducedMotion ? particle.homeY : height / 2 + (Math.random() - .5) * height * 1.4;
+          }
+        }
+        if (paused) draw();
+      }
+
+      function sampleLogo(image) {
+        const source = document.createElement('canvas');
+        source.width = source.height = 640;
+        const sourceCtx = source.getContext('2d', { willReadFrequently: true });
+        sourceCtx.fillStyle = '#fff';
+        sourceCtx.fillRect(0, 0, 640, 640);
+        sourceCtx.drawImage(image, 0, 0, 640, 640);
+        const pixels = sourceCtx.getImageData(0, 0, 640, 640).data;
+        for (let y = 2; y < 640; y += 3) {
+          for (let x = 2; x < 640; x += 3) {
+            const offset = (y * 640 + x) * 4;
+            const darkness = 255 - (pixels[offset] * .299 + pixels[offset + 1] * .587 + pixels[offset + 2] * .114);
+            if (darkness < 95 || Math.random() > Math.min(1, (darkness - 75) / 100)) continue;
+            particles.push({ sourceX: x, sourceY: y, vx: 0, vy: 0, homeX: 0, homeY: 0, x: undefined, y: undefined, size: .85 + Math.random() * .55 });
+          }
+        }
+        resize();
+        requestAnimationFrame(tick);
+      }
+
+      function scatter() {
+        for (const particle of particles) {
+          const angle = Math.atan2(particle.y - height / 2, particle.x - width / 2) + (Math.random() - .5) * 1.8;
+          const force = 7 + Math.random() * 18;
+          particle.vx += Math.cos(angle) * force;
+          particle.vy += Math.sin(angle) * force;
+        }
+        if (paused) draw();
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = '#171b19';
+        for (const particle of particles) {
+          ctx.fillRect(particle.x, particle.y, particle.size * scale + .35, particle.size * scale + .35);
+        }
+      }
+
+      function tick() {
+        if (!paused) {
+          const radius = Math.max(55, 100 * scale);
+          const radiusSq = radius * radius;
+          for (const particle of particles) {
+            if (pointer.active) {
+              const dx = particle.x - pointer.x;
+              const dy = particle.y - pointer.y;
+              const distanceSq = dx * dx + dy * dy;
+              if (distanceSq > 1 && distanceSq < radiusSq) {
+                const force = (1 - distanceSq / radiusSq) * 4;
+                const distance = Math.sqrt(distanceSq);
+                particle.vx += dx / distance * force;
+                particle.vy += dy / distance * force;
+              }
+            }
+            particle.vx = (particle.vx + (particle.homeX - particle.x) * .025) * .87;
+            particle.vy = (particle.vy + (particle.homeY - particle.y) * .025) * .87;
+            particle.x += particle.vx;
+            particle.y += particle.vy;
+          }
+          draw();
+        }
+        frame = requestAnimationFrame(tick);
+      }
+
+      stage.addEventListener('pointermove', event => {
+        const bounds = stage.getBoundingClientRect();
+        pointer.x = event.clientX - bounds.left;
+        pointer.y = event.clientY - bounds.top;
+        pointer.active = true;
+      });
+      stage.addEventListener('pointerleave', () => { pointer.active = false; });
+      stage.addEventListener('pointerdown', scatter);
+      document.getElementById('scatter').addEventListener('click', scatter);
+      document.getElementById('reset').addEventListener('click', () => {
+        for (const particle of particles) {
+          particle.x = particle.homeX + (Math.random() - .5) * Math.min(width, 420);
+          particle.y = particle.homeY + (Math.random() - .5) * Math.min(height, 420);
+          particle.vx = particle.vy = 0;
+        }
+        if (paused) draw();
+      });
+      pauseButton.addEventListener('click', () => {
+        paused = !paused;
+        pauseButton.textContent = paused ? '继续' : '暂停';
+        pauseButton.setAttribute('aria-label', paused ? '继续动画' : '暂停动画');
+        pauseButton.setAttribute('aria-pressed', String(paused));
+      });
+      window.addEventListener('resize', resize);
+      const image = new Image();
+      image.onload = () => sampleLogo(image);
+      image.onerror = () => {
+        const message = document.createElement('p');
+        message.className = 'error';
+        message.textContent = '无法加载 logo.jpg，请保持它与此 HTML 在同一目录。';
+        stage.appendChild(message);
+      };
+      image.src = '/static/logo.jpg';
+    })();
+  </script>
+</body>
+</html>

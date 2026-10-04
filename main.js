@@ -787,5 +787,146 @@ window.addEventListener('load', () => {
     });
     updatePause();
     initializeNebula();
+
+    function initializeLogoParticles() {
+      const logoStage = document.querySelector('#logo-stage');
+      const logoCanvas = document.querySelector('#logo-scene');
+      const logoContext = logoCanvas.getContext('2d');
+      const logoPauseButton = document.querySelector('#logo-pause');
+      const logoError = document.querySelector('#logo-error');
+      const logoPointer = { x: -1000, y: -1000, active: false };
+      const logoParticles = [];
+      let logoWidth = 0;
+      let logoHeight = 0;
+      let logoScale = 1;
+      let logoPaused = reducedMotion.matches;
+
+      function drawLogo() {
+        logoContext.clearRect(0, 0, logoWidth, logoHeight);
+        logoContext.fillStyle = '#171b19';
+        for (const particle of logoParticles) {
+          logoContext.fillRect(particle.x, particle.y, particle.size * logoScale + .35, particle.size * logoScale + .35);
+        }
+      }
+
+      function resizeLogo() {
+        const bounds = logoStage.getBoundingClientRect();
+        const ratio = Math.min(devicePixelRatio || 1, 2);
+        logoWidth = bounds.width;
+        logoHeight = bounds.height;
+        logoCanvas.width = Math.round(logoWidth * ratio);
+        logoCanvas.height = Math.round(logoHeight * ratio);
+        logoContext.setTransform(ratio, 0, 0, ratio, 0, 0);
+        logoScale = Math.min(logoWidth * .86, logoHeight * .88, 620) / 640;
+        for (const particle of logoParticles) {
+          particle.homeX = logoWidth / 2 + (particle.sourceX - 320) * logoScale;
+          particle.homeY = logoHeight / 2 + (particle.sourceY - 320) * logoScale;
+          if (particle.x === undefined) {
+            particle.x = logoPaused ? particle.homeX : logoWidth / 2 + (Math.random() - .5) * logoWidth * 1.4;
+            particle.y = logoPaused ? particle.homeY : logoHeight / 2 + (Math.random() - .5) * logoHeight * 1.4;
+          }
+        }
+        if (logoPaused) drawLogo();
+      }
+
+      function scatterLogo() {
+        for (const particle of logoParticles) {
+          const angle = Math.atan2(particle.y - logoHeight / 2, particle.x - logoWidth / 2) + (Math.random() - .5) * 1.8;
+          const force = 7 + Math.random() * 18;
+          particle.vx += Math.cos(angle) * force;
+          particle.vy += Math.sin(angle) * force;
+        }
+        if (logoPaused) drawLogo();
+      }
+
+      function updateLogoPause() {
+        logoPauseButton.innerHTML = `<i data-lucide="${logoPaused ? 'play' : 'pause'}"></i>`;
+        logoPauseButton.setAttribute('aria-label', logoPaused ? '播放粒子动画' : '暂停粒子动画');
+        logoPauseButton.title = logoPaused ? '播放粒子动画' : '暂停粒子动画';
+        logoPauseButton.setAttribute('aria-pressed', String(logoPaused));
+        refreshIcons();
+      }
+
+      function tickLogo() {
+        if (!logoPaused && !document.hidden) {
+          const radius = Math.max(55, 100 * logoScale);
+          const radiusSquared = radius * radius;
+          for (const particle of logoParticles) {
+            if (logoPointer.active) {
+              const dx = particle.x - logoPointer.x;
+              const dy = particle.y - logoPointer.y;
+              const distanceSquared = dx * dx + dy * dy;
+              if (distanceSquared > 1 && distanceSquared < radiusSquared) {
+                const force = (1 - distanceSquared / radiusSquared) * 4;
+                const distance = Math.sqrt(distanceSquared);
+                particle.vx += dx / distance * force;
+                particle.vy += dy / distance * force;
+              }
+            }
+            particle.vx = (particle.vx + (particle.homeX - particle.x) * .025) * .87;
+            particle.vy = (particle.vy + (particle.homeY - particle.y) * .025) * .87;
+            particle.x += particle.vx;
+            particle.y += particle.vy;
+          }
+          drawLogo();
+        }
+        requestAnimationFrame(tickLogo);
+      }
+
+      logoStage.addEventListener('pointermove', (event) => {
+        const bounds = logoStage.getBoundingClientRect();
+        logoPointer.x = event.clientX - bounds.left;
+        logoPointer.y = event.clientY - bounds.top;
+        logoPointer.active = true;
+      });
+      logoStage.addEventListener('pointerleave', () => { logoPointer.active = false; });
+      logoStage.addEventListener('pointerdown', scatterLogo);
+      document.querySelector('#logo-scatter').addEventListener('click', scatterLogo);
+      document.querySelector('#logo-reset').addEventListener('click', () => {
+        for (const particle of logoParticles) {
+          particle.x = particle.homeX + (Math.random() - .5) * Math.min(logoWidth, 420);
+          particle.y = particle.homeY + (Math.random() - .5) * Math.min(logoHeight, 420);
+          particle.vx = 0;
+          particle.vy = 0;
+        }
+        if (logoPaused) drawLogo();
+      });
+      logoPauseButton.addEventListener('click', () => {
+        logoPaused = !logoPaused;
+        updateLogoPause();
+      });
+      reducedMotion.addEventListener('change', () => {
+        logoPaused = reducedMotion.matches;
+        updateLogoPause();
+      });
+
+      const logoImage = new Image();
+      logoImage.addEventListener('load', () => {
+        const source = document.createElement('canvas');
+        source.width = 640;
+        source.height = 640;
+        const sourceContext = source.getContext('2d', { willReadFrequently: true });
+        sourceContext.fillStyle = '#fff';
+        sourceContext.fillRect(0, 0, 640, 640);
+        sourceContext.drawImage(logoImage, 0, 0, 640, 640);
+        const pixels = sourceContext.getImageData(0, 0, 640, 640).data;
+        for (let y = 2; y < 640; y += 3) {
+          for (let x = 2; x < 640; x += 3) {
+            const offset = (y * 640 + x) * 4;
+            const darkness = 255 - (pixels[offset] * .299 + pixels[offset + 1] * .587 + pixels[offset + 2] * .114);
+            if (darkness < 95 || Math.random() > Math.min(1, (darkness - 75) / 100)) continue;
+            logoParticles.push({ sourceX: x, sourceY: y, homeX: 0, homeY: 0, x: undefined, y: undefined, vx: 0, vy: 0, size: .85 + Math.random() * .55 });
+          }
+        }
+        resizeLogo();
+        new ResizeObserver(resizeLogo).observe(logoStage);
+        requestAnimationFrame(tickLogo);
+      });
+      logoImage.addEventListener('error', () => { logoError.hidden = false; });
+      logoImage.src = './logo.jpg';
+      updateLogoPause();
+    }
+
+    initializeLogoParticles();
     document.body.classList.add('scene-ready');
 });
