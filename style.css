@@ -12,8 +12,8 @@ a:focus-visible, button:focus-visible { outline: 2px solid #bddff4; outline-offs
 #universe { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 #universe canvas { width: 100%; height: 100%; display: block; }
 header { position: absolute; top: 0; left: 0; width: 100%; padding: 38px 56px; display: flex; align-items: center; gap: 22px; z-index: 2; }
-.brand { font-family: Georgia, serif; font-weight: bold; font-size: 38px; line-height: 1; display: flex; align-items: flex-start; }
-.brand-dot { color: #d6e9ef; font-family: sans-serif; font-size: 21px; margin: 0 0 0 3px; }
+.brand { display: flex; align-items: center; }
+.brand img { display: block; width: 42px; height: 42px; object-fit: contain; }
 .club-label { font-size: 10px; color: #9da3a9; border-left: 1px solid #33383e; padding-left: 22px; }
 .nav-link { margin-left: auto; font-size: 12px; display: flex; align-items: center; gap: 12px; }
 svg { width: 16px; height: 16px; stroke-width: 1.4; }
@@ -48,7 +48,7 @@ button:hover { background: #ffffff16; color: #fff; }
 #logo-scene { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
 .logo-study-copy { position: absolute; top: 50%; right: 2%; width: 42%; translate: 0 -50%; z-index: 1; }
 .logo-study-copy p { margin: 0 0 22px; color: #b8bebc; font-size: 15px; line-height: 1.8; }
-.logo-study-copy strong { font-size: 16px; font-weight: 400; }
+.logo-study-copy strong { font-size: 20px; font-weight: 400; }
 .logo-study-copy p:first-child strong { font-size: 24px; }
 .logo-study-copy p:last-child { margin-bottom: 0; }
 .logo-study-footer { padding-top: 24px; border-top: 1px solid #ffffff24; }
@@ -65,8 +65,25 @@ h2 { font-size: 58px; font-weight: 400; line-height: 1.45; margin: 0; }
 .about-signature { display: block; color: #65777b; font-size: 10px; margin-top: 36px; }
 footer { display: flex; justify-content: space-between; border-top: 1px solid #ffffff14; padding-top: 23px; font-size: 11px; color: #8c959b; }
 footer a { display: flex; align-items: center; gap: 8px; }
+.why-join { position: relative; padding: 84px 56px 96px; overflow: hidden; color: #f2f3f4; background-color: #080b0e; background-image: linear-gradient(rgba(255, 255, 255, .025) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .025) 1px, transparent 1px); background-size: 54px 54px; }
+.why-join-inner { max-width: 1600px; margin: 0 auto; }
+.why-join-heading { margin-bottom: 38px; }
+.why-join-eyebrow { color: #8c959b; font-size: 14px; font-weight: 700; letter-spacing: .04em; }
+.why-join-heading h2 { margin: 14px 0 12px; font-size: clamp(36px, 3.4vw, 52px); font-weight: 750; line-height: 1.2; }
+.why-join-heading p { max-width: 820px; margin: 0; color: #acb0b7; font-size: 16px; line-height: 1.7; }
+.why-join-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; }
+.why-card { position: relative; min-height: 514px; padding: 42px 34px 230px; overflow: hidden; border: 1px solid #ffffff20; border-radius: 9px; background: #101315; box-shadow: 0 16px 36px rgba(0, 0, 0, .2); isolation: isolate; }
+.why-card-number { position: relative; z-index: 2; display: block; color: #c64135; font-size: 18px; font-weight: 700; transition: opacity .45s ease; }
+.why-card h3 { position: relative; z-index: 2; margin: 27px 0 14px; font-size: 23px; line-height: 1.4; transition: opacity .45s ease; }
+.why-card p { position: relative; z-index: 2; margin: 0; color: #b0b7ba; font-size: 17px; line-height: 1.95; transition: opacity .45s ease; }
+.why-card img { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: translateY(24%) scale(1.01); transition: transform .7s cubic-bezier(.2, .7, .2, 1); }
+.why-card::after { position: absolute; z-index: 1; inset: 0; content: ""; pointer-events: none; background: linear-gradient(to bottom, #101315 0%, #101315 27%, rgba(16, 19, 21, .82) 48%, rgba(16, 19, 21, 0) 100%); transition: opacity .45s ease; }
+@media (hover: hover) and (min-width: 701px) { .why-card:hover img, .why-card:focus-within img { transform: translateY(0) scale(1.08); } .why-card:hover::after, .why-card:focus-within::after { opacity: .16; } .why-card:hover .why-card-number, .why-card:hover h3, .why-card:hover p, .why-card:focus-within .why-card-number, .why-card:focus-within h3, .why-card:focus-within p { opacity: 0; } }
 @media (max-width: 1000px) { h1 { font-size: 168px; gap: .6em; } }
+@media (max-width: 1100px) { .why-join-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .why-card { min-height: 470px; } }
 @media (max-width: 700px) { header { padding: 25px 24px; } .hero { min-height: 560px; } h1 { font-size: 108px; gap: .36em; } .manifesto { margin-top: 128px; font-size: 11px; letter-spacing: 0; } .hero-footer { left: 24px; right: 24px; bottom: 25px; } .live-label { display: none; } .speed-control { width: 82px; } .speed-control input { width: 58px; } .explore { gap: 10px; font-size: 10px; } .scroll-line { width: 15px; } .logo-study { height: 78svh; min-height: 560px; padding: 28px 24px 24px; } .logo-study-heading > span:last-child { display: none; } .logo-stage::before { width: 60vw; } .logo-stage::after { width: 50vw; } .about { padding: 30px 24px 22px; } .section-label > span:last-child { display: none; } .about-content { margin: 66px 0; grid-template-columns: 1fr; gap: 38px; } h2 { font-size: 40px; } .about-content p { font-size: 14px; } }
+@media (max-width: 700px) { .why-join { padding: 56px 24px 58px; background-size: 42px 42px; } .why-join-heading { margin-bottom: 28px; } .why-join-heading h2 { margin-top: 12px; font-size: 34px; } .why-join-heading p { font-size: 15px; } .why-join-grid { gap: 14px; } .why-card { min-height: 420px; padding: 26px 22px 190px; } .why-card h3 { margin: 20px 0 10px; font-size: 20px; } .why-card p { font-size: 14px; line-height: 1.8; } .why-card img { top: auto; height: 156px; transform: none; } .why-card::after { inset: auto 0 0; height: 156px; background: linear-gradient(to bottom, #101315, rgba(16, 19, 21, 0)); } }
+@media (max-width: 460px) { .why-join-grid { grid-template-columns: 1fr; } .why-card { min-height: 400px; padding-right: 26px; padding-left: 26px; } .why-card img { height: 176px; } .why-card::after { height: 176px; } }
 @media (max-width: 390px) { h1 { font-size: 92px; gap: .24em; } .club-label { padding-left: 14px; } header { gap: 14px; } }
 @media (max-width: 760px) {
 	.logo-study { height: auto; min-height: 0; }
