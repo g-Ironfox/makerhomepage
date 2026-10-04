@@ -186,7 +186,8 @@
         message.textContent = '无法加载 logo.jpg，请保持它与此 HTML 在同一目录。';
         stage.appendChild(message);
       };
-      image.src = '/static/logo.jpg';
+      image.crossOrigin = 'anonymous';
+      image.src = './logo.jpg';
     })();
   </script>
 </body>

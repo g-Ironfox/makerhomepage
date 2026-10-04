@@ -799,11 +799,18 @@ window.addEventListener('load', () => {
       let logoWidth = 0;
       let logoHeight = 0;
       let logoScale = 1;
+      let logoZoneRadius = 0;
       let logoPaused = reducedMotion.matches;
+
+      function isInsideLogoZone(x, y) {
+        const dx = x - logoWidth * .25;
+        const dy = y - logoHeight / 2;
+        return dx * dx + dy * dy <= logoZoneRadius * logoZoneRadius;
+      }
 
       function drawLogo() {
         logoContext.clearRect(0, 0, logoWidth, logoHeight);
-        logoContext.fillStyle = '#171b19';
+        logoContext.fillStyle = '#fff';
         for (const particle of logoParticles) {
           logoContext.fillRect(particle.x, particle.y, particle.size * logoScale + .35, particle.size * logoScale + .35);
         }
@@ -817,12 +824,14 @@ window.addEventListener('load', () => {
         logoCanvas.width = Math.round(logoWidth * ratio);
         logoCanvas.height = Math.round(logoHeight * ratio);
         logoContext.setTransform(ratio, 0, 0, ratio, 0, 0);
-        logoScale = Math.min(logoWidth * .86, logoHeight * .88, 620) / 640;
+        logoZoneRadius = parseFloat(getComputedStyle(logoStage, '::before').width) / 2;
+        const logoCenterX = logoWidth * .25;
+        logoScale = Math.min(logoWidth * .43, logoHeight * .88, 620) / 640;
         for (const particle of logoParticles) {
-          particle.homeX = logoWidth / 2 + (particle.sourceX - 320) * logoScale;
+          particle.homeX = logoCenterX + (particle.sourceX - 320) * logoScale;
           particle.homeY = logoHeight / 2 + (particle.sourceY - 320) * logoScale;
           if (particle.x === undefined) {
-            particle.x = logoPaused ? particle.homeX : logoWidth / 2 + (Math.random() - .5) * logoWidth * 1.4;
+            particle.x = logoPaused ? particle.homeX : Math.random() * logoWidth * .5;
             particle.y = logoPaused ? particle.homeY : logoHeight / 2 + (Math.random() - .5) * logoHeight * 1.4;
           }
         }
@@ -831,7 +840,7 @@ window.addEventListener('load', () => {
 
       function scatterLogo() {
         for (const particle of logoParticles) {
-          const angle = Math.atan2(particle.y - logoHeight / 2, particle.x - logoWidth / 2) + (Math.random() - .5) * 1.8;
+          const angle = Math.atan2(particle.y - logoHeight / 2, particle.x - logoWidth * .25) + (Math.random() - .5) * 1.8;
           const force = 7 + Math.random() * 18;
           particle.vx += Math.cos(angle) * force;
           particle.vy += Math.sin(angle) * force;
@@ -867,6 +876,10 @@ window.addEventListener('load', () => {
             particle.vy = (particle.vy + (particle.homeY - particle.y) * .025) * .87;
             particle.x += particle.vx;
             particle.y += particle.vy;
+            if (particle.x < 0 || particle.x > logoWidth * .5) {
+              particle.x = Math.max(0, Math.min(logoWidth * .5, particle.x));
+              particle.vx *= -.55;
+            }
           }
           drawLogo();
         }
@@ -877,14 +890,21 @@ window.addEventListener('load', () => {
         const bounds = logoStage.getBoundingClientRect();
         logoPointer.x = event.clientX - bounds.left;
         logoPointer.y = event.clientY - bounds.top;
-        logoPointer.active = true;
+        logoPointer.active = isInsideLogoZone(logoPointer.x, logoPointer.y);
+        logoCanvas.style.cursor = logoPointer.active ? 'crosshair' : 'default';
       });
-      logoStage.addEventListener('pointerleave', () => { logoPointer.active = false; });
-      logoStage.addEventListener('pointerdown', scatterLogo);
+      logoStage.addEventListener('pointerleave', () => {
+        logoPointer.active = false;
+        logoCanvas.style.cursor = 'default';
+      });
+      logoStage.addEventListener('pointerdown', (event) => {
+        const bounds = logoStage.getBoundingClientRect();
+        if (isInsideLogoZone(event.clientX - bounds.left, event.clientY - bounds.top)) scatterLogo();
+      });
       document.querySelector('#logo-scatter').addEventListener('click', scatterLogo);
       document.querySelector('#logo-reset').addEventListener('click', () => {
         for (const particle of logoParticles) {
-          particle.x = particle.homeX + (Math.random() - .5) * Math.min(logoWidth, 420);
+          particle.x = Math.max(0, Math.min(logoWidth * .5, particle.homeX + (Math.random() - .5) * Math.min(logoWidth * .5, 420)));
           particle.y = particle.homeY + (Math.random() - .5) * Math.min(logoHeight, 420);
           particle.vx = 0;
           particle.vy = 0;
@@ -901,6 +921,7 @@ window.addEventListener('load', () => {
       });
 
       const logoImage = new Image();
+      logoImage.crossOrigin = 'anonymous';
       logoImage.addEventListener('load', () => {
         const source = document.createElement('canvas');
         source.width = 640;
