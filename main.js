@@ -802,9 +802,19 @@ window.addEventListener('load', () => {
       let logoZoneRadius = 0;
       let logoPaused = reducedMotion.matches;
 
+      function logoHorizontalRange() {
+        return logoWidth * (matchMedia('(max-width: 760px)').matches ? .5 : .25);
+      }
+
+      function logoCenter() {
+        const stacked = matchMedia('(max-width: 760px)').matches;
+        return { x: logoWidth * (stacked ? .5 : .25), y: stacked ? Math.min(logoWidth, 460) / 2 : logoHeight / 2 };
+      }
+
       function isInsideLogoZone(x, y) {
-        const dx = x - logoWidth * .25;
-        const dy = y - logoHeight / 2;
+        const center = logoCenter();
+        const dx = x - center.x;
+        const dy = y - center.y;
         return dx * dx + dy * dy <= logoZoneRadius * logoZoneRadius;
       }
 
@@ -819,28 +829,30 @@ window.addEventListener('load', () => {
       function resizeLogo() {
         const bounds = logoStage.getBoundingClientRect();
         const ratio = Math.min(devicePixelRatio || 1, 2);
+        const stacked = matchMedia('(max-width: 760px)').matches;
         logoWidth = bounds.width;
         logoHeight = bounds.height;
         logoCanvas.width = Math.round(logoWidth * ratio);
         logoCanvas.height = Math.round(logoHeight * ratio);
         logoContext.setTransform(ratio, 0, 0, ratio, 0, 0);
         logoZoneRadius = parseFloat(getComputedStyle(logoStage, '::before').width) / 2;
-        const logoCenterX = logoWidth * .25;
-        logoScale = Math.min(logoWidth * .43, logoHeight * .88, 620) / 640;
+        const center = logoCenter();
+        logoScale = Math.min(logoWidth * (stacked ? .8 : .43), (stacked ? Math.min(logoWidth, 460) : logoHeight) * .88, 620) / 640;
         for (const particle of logoParticles) {
-          particle.homeX = logoCenterX + (particle.sourceX - 320) * logoScale;
-          particle.homeY = logoHeight / 2 + (particle.sourceY - 320) * logoScale;
+          particle.homeX = center.x + (particle.sourceX - 320) * logoScale;
+          particle.homeY = center.y + (particle.sourceY - 320) * logoScale;
           if (particle.x === undefined) {
-            particle.x = logoPaused ? particle.homeX : Math.random() * logoWidth * .5;
-            particle.y = logoPaused ? particle.homeY : logoHeight / 2 + (Math.random() - .5) * logoHeight * 1.4;
+            particle.x = logoPaused ? particle.homeX : center.x + (Math.random() - .5) * logoWidth * .5;
+            particle.y = logoPaused ? particle.homeY : center.y + (Math.random() - .5) * (stacked ? Math.min(logoWidth, 460) : logoHeight) * 1.4;
           }
         }
         if (logoPaused) drawLogo();
       }
 
       function scatterLogo() {
+        const center = logoCenter();
         for (const particle of logoParticles) {
-          const angle = Math.atan2(particle.y - logoHeight / 2, particle.x - logoWidth * .25) + (Math.random() - .5) * 1.8;
+          const angle = Math.atan2(particle.y - center.y, particle.x - center.x) + (Math.random() - .5) * 1.8;
           const force = 7 + Math.random() * 18;
           particle.vx += Math.cos(angle) * force;
           particle.vy += Math.sin(angle) * force;
@@ -860,6 +872,8 @@ window.addEventListener('load', () => {
         if (!logoPaused && !document.hidden) {
           const radius = Math.max(55, 100 * logoScale);
           const radiusSquared = radius * radius;
+          const centerX = logoCenter().x;
+          const horizontalRange = logoHorizontalRange();
           for (const particle of logoParticles) {
             if (logoPointer.active) {
               const dx = particle.x - logoPointer.x;
@@ -876,8 +890,8 @@ window.addEventListener('load', () => {
             particle.vy = (particle.vy + (particle.homeY - particle.y) * .025) * .87;
             particle.x += particle.vx;
             particle.y += particle.vy;
-            if (particle.x < 0 || particle.x > logoWidth * .5) {
-              particle.x = Math.max(0, Math.min(logoWidth * .5, particle.x));
+            if (particle.x < centerX - horizontalRange || particle.x > centerX + horizontalRange) {
+              particle.x = Math.max(centerX - horizontalRange, Math.min(centerX + horizontalRange, particle.x));
               particle.vx *= -.55;
             }
           }
@@ -903,9 +917,11 @@ window.addEventListener('load', () => {
       });
       document.querySelector('#logo-scatter').addEventListener('click', scatterLogo);
       document.querySelector('#logo-reset').addEventListener('click', () => {
+        const center = logoCenter();
+        const horizontalRange = logoHorizontalRange();
         for (const particle of logoParticles) {
-          particle.x = Math.max(0, Math.min(logoWidth * .5, particle.homeX + (Math.random() - .5) * Math.min(logoWidth * .5, 420)));
-          particle.y = particle.homeY + (Math.random() - .5) * Math.min(logoHeight, 420);
+          particle.x = Math.max(center.x - horizontalRange, Math.min(center.x + horizontalRange, particle.homeX + (Math.random() - .5) * Math.min(logoWidth * .5, 420)));
+          particle.y = particle.homeY + (Math.random() - .5) * Math.min(matchMedia('(max-width: 760px)').matches ? Math.min(logoWidth, 460) : logoHeight, 420);
           particle.vx = 0;
           particle.vy = 0;
         }
