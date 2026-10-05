@@ -2,9 +2,6 @@ window.addEventListener('load', () => {
   window.lucide?.createIcons();
     const host = document.querySelector('#universe');
     const letter = document.querySelector('#galaxy-letter');
-    const pauseButton = document.querySelector('#pause');
-    const resetButton = document.querySelector('#reset');
-    const speedControl = document.querySelector('#speed');
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
     const seed = 20260921;
     const galaxyZoom = 2;
@@ -12,7 +9,7 @@ window.addEventListener('load', () => {
     const armSpread = 1.5;
 
     let paused = reducedMotion.matches;
-    let motionSpeed = Number(speedControl.value);
+    const motionSpeed = .55;
     let animationFrame;
     let lastTime = 0;
     let elapsed = 0;
@@ -45,18 +42,6 @@ window.addEventListener('load', () => {
       const progress = Math.min(1, Math.max(0, t));
       const smooth = progress * progress * (3 - 2 * progress);
       return smooth * nebulaRightBias;
-    }
-
-    function refreshIcons() {
-      window.lucide?.createIcons();
-    }
-
-    function updatePause() {
-      pauseButton.innerHTML = `<i data-lucide="${paused ? 'play' : 'pause'}"></i>`;
-      pauseButton.setAttribute('aria-label', paused ? '播放动画' : '暂停动画');
-      pauseButton.title = paused ? '播放动画' : '暂停动画';
-      pauseButton.setAttribute('aria-pressed', String(paused));
-      refreshIcons();
     }
 
     // —— 游戏式粒子系统：确定性随机 + 预渲染光斑贴图（impostor）+ 分层绘制 ——
@@ -738,16 +723,6 @@ window.addEventListener('load', () => {
       animationFrame = requestAnimationFrame(draw);
     }
 
-    function resetNebula() {
-      elapsed = 0;
-      lastTime = 0;
-      introStart = performance.now();
-      pointer.x = 0;
-      pointer.y = 0;
-      pointer.targetX = 0;
-      pointer.targetY = 0;
-    }
-
     function initializeNebula() {
       canvas = document.createElement('canvas');
       context = canvas.getContext('2d');
@@ -772,27 +747,15 @@ window.addEventListener('load', () => {
       animationFrame = requestAnimationFrame(draw);
     }
 
-    pauseButton.addEventListener('click', () => {
-      paused = !paused;
-      updatePause();
-    });
-
-    resetButton.addEventListener('click', resetNebula);
-    speedControl.addEventListener('input', () => {
-      motionSpeed = Number(speedControl.value);
-    });
     reducedMotion.addEventListener('change', () => {
       paused = reducedMotion.matches;
-      updatePause();
     });
-    updatePause();
     initializeNebula();
 
     function initializeLogoParticles() {
       const logoStage = document.querySelector('#logo-stage');
       const logoCanvas = document.querySelector('#logo-scene');
       const logoContext = logoCanvas.getContext('2d');
-      const logoPauseButton = document.querySelector('#logo-pause');
       const logoError = document.querySelector('#logo-error');
       const logoPointer = { x: -1000, y: -1000, active: false };
       const logoParticles = [];
@@ -860,14 +823,6 @@ window.addEventListener('load', () => {
         if (logoPaused) drawLogo();
       }
 
-      function updateLogoPause() {
-        logoPauseButton.innerHTML = `<i data-lucide="${logoPaused ? 'play' : 'pause'}"></i>`;
-        logoPauseButton.setAttribute('aria-label', logoPaused ? '播放粒子动画' : '暂停粒子动画');
-        logoPauseButton.title = logoPaused ? '播放粒子动画' : '暂停粒子动画';
-        logoPauseButton.setAttribute('aria-pressed', String(logoPaused));
-        refreshIcons();
-      }
-
       function tickLogo() {
         if (!logoPaused && !document.hidden) {
           const radius = Math.max(55, 100 * logoScale);
@@ -915,25 +870,8 @@ window.addEventListener('load', () => {
         const bounds = logoStage.getBoundingClientRect();
         if (isInsideLogoZone(event.clientX - bounds.left, event.clientY - bounds.top)) scatterLogo();
       });
-      document.querySelector('#logo-scatter').addEventListener('click', scatterLogo);
-      document.querySelector('#logo-reset').addEventListener('click', () => {
-        const center = logoCenter();
-        const horizontalRange = logoHorizontalRange();
-        for (const particle of logoParticles) {
-          particle.x = Math.max(center.x - horizontalRange, Math.min(center.x + horizontalRange, particle.homeX + (Math.random() - .5) * Math.min(logoWidth * .5, 420)));
-          particle.y = particle.homeY + (Math.random() - .5) * Math.min(matchMedia('(max-width: 760px)').matches ? Math.min(logoWidth, 460) : logoHeight, 420);
-          particle.vx = 0;
-          particle.vy = 0;
-        }
-        if (logoPaused) drawLogo();
-      });
-      logoPauseButton.addEventListener('click', () => {
-        logoPaused = !logoPaused;
-        updateLogoPause();
-      });
       reducedMotion.addEventListener('change', () => {
         logoPaused = reducedMotion.matches;
-        updateLogoPause();
       });
 
       const logoImage = new Image();
@@ -961,7 +899,6 @@ window.addEventListener('load', () => {
       });
       logoImage.addEventListener('error', () => { logoError.hidden = false; });
       logoImage.src = './logo.jpg';
-      updateLogoPause();
     }
 
     initializeLogoParticles();
