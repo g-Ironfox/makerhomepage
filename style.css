@@ -84,12 +84,23 @@ h2 { font-size: clamp(40px, 4vw, 58px); font-weight: 400; line-height: 1.35; mar
 .join-action-secondary:hover { color: var(--deep); background: var(--ink); }
 .join-copy > .join-note { margin-top: 28px; font-size: 14px; }
 .join-group { padding: 36px; border: 1px solid #30393e; border-radius: 4px; background: var(--surface); }
-.join-logo { width: min(100%, 240px); aspect-ratio: 1; margin-bottom: 28px; display: grid; place-items: center; background: var(--deep); }
-.join-logo img { display: block; width: 68%; height: 68%; object-fit: contain; }
+.join-logo { width: min(100%, 240px); margin-bottom: 28px; background: var(--deep); }
+.join-logo img { display: block; width: 100%; height: auto; }
 .join-group h3 { margin: 0 0 14px; font-size: 23px; font-weight: 400; }
 .join-group p { margin: 0 0 16px; color: var(--muted); font-size: 15px; line-height: 1.9; }
 .join-group p:last-child { margin-bottom: 0; }
 .join-group strong { color: var(--ink); font-weight: 600; }
+.site-footer { padding: 72px 56px 32px; background: #111; color: var(--ink); }
+.footer-grid { display: grid; grid-template-columns: 1.4fr 1fr .75fr; gap: 48px; }
+.footer-column { min-width: 0; }
+.footer-column h2 { margin: 0 0 28px; font-size: 20px; font-weight: 600; line-height: 1.4; }
+.footer-intro h2 { font-size: 26px; }
+.footer-column p { margin: 0 0 18px; color: #c4c4c4; font-size: 18px; line-height: 1.5; }
+.footer-column a, .footer-pending { color: var(--ink); text-decoration: underline; text-decoration-color: #555; text-underline-offset: 5px; }
+.footer-column a:hover { text-decoration-color: var(--ink); }
+.footer-bottom { margin-top: 44px; padding-top: 28px; border-top: 1px solid #303030; color: #888; text-align: center; font-size: 15px; line-height: 1.6; }
+@media (max-width: 900px) { .footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .site-footer { padding: 56px 24px 28px; } .footer-grid { grid-template-columns: 1fr; gap: 28px; } .footer-column h2 { margin-bottom: 18px; } .footer-column p { margin-bottom: 12px; font-size: 16px; } .footer-bottom { margin-top: 28px; font-size: 13px; } }
 @media (max-width: 1000px) { h1 { font-size: 168px; gap: .6em; } }
 @media (max-width: 1100px) { .why-join-grid, .departments-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .join-inner { grid-template-columns: 1fr; gap: 48px; } .join-group { max-width: 540px; } }
