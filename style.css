@@ -51,8 +51,9 @@ h2 { font-size: clamp(40px, 4vw, 58px); font-weight: 400; line-height: 1.35; mar
 .why-join-heading p { max-width: 820px; margin: 0; color: var(--muted); font-size: 16px; line-height: 1.9; }
 .why-join-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px; }
 .why-card { min-width: 0; display: flex; flex-direction: column; }
-.why-card-number { display: block; color: var(--accent); font-size: 11px; margin-bottom: 14px; }
-.why-card h3 { margin: 24px 0 12px; font-size: 23px; font-weight: 400; line-height: 1.4; }
+.why-card-number { display: flex; align-items: center; gap: 10px; margin-top: 16px; color: var(--accent); font-size: 12px; font-weight: 600; line-height: 1; }
+.why-card-number::after { content: ""; width: 28px; border-top: 1px solid #6c8592; }
+.why-card h3 { margin: 18px 0 12px; font-size: 23px; font-weight: 400; line-height: 1.4; }
 .why-card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.9; }
 .why-card img { display: block; order: -1; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; filter: saturate(.75); }
 .departments { padding: 48px 56px 88px; background: #0b1013; }
