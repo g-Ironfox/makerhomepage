@@ -65,6 +65,16 @@ h2 { font-size: clamp(40px, 4vw, 58px); font-weight: 400; line-height: 1.35; mar
 .department h3 { margin: 22px 0 14px; font-size: 23px; font-weight: 400; line-height: 1.4; }
 .department p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.9; }
 .department p:last-child { margin-top: auto; padding-top: 28px; color: var(--ink); }
+.activities { padding: 48px 56px 88px; background: #0b1013; }
+.activities-inner { max-width: 1280px; margin: 0 auto; }
+.activities h2 { margin-bottom: 40px; }
+.activities-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.activity { position: relative; min-width: 0; margin: 0; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 4px; background: var(--surface); }
+.activity-featured { grid-row: span 2; aspect-ratio: auto; }
+.activity img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.activity::after { content: ""; position: absolute; inset: 35% 0 0; background: linear-gradient(transparent, rgba(0, 0, 0, .78)); pointer-events: none; }
+.activity figcaption { position: absolute; z-index: 1; right: 20px; bottom: 20px; left: 20px; font-size: 18px; font-weight: 600; line-height: 1.5; text-shadow: 0 1px 8px rgba(0, 0, 0, .45); }
+.activity-featured figcaption { right: 24px; bottom: 24px; left: 24px; font-size: 21px; }
 .join { padding: 48px 56px 96px; background: #0b1013; }
 .join-inner { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, .8fr); gap: 80px; align-items: center; }
 .join-copy > p { max-width: 680px; margin: 24px 0 0; color: var(--muted); font-size: 16px; line-height: 1.9; }
@@ -86,6 +96,7 @@ h2 { font-size: clamp(40px, 4vw, 58px); font-weight: 400; line-height: 1.35; mar
 @media (max-width: 700px) { header { padding: 25px 24px; } .hero { min-height: 560px; } h1 { font-size: 108px; gap: .36em; } .manifesto { margin-top: 128px; font-size: 11px; letter-spacing: 0; } .logo-study { height: 78svh; min-height: 560px; padding: 56px 24px 24px; } .logo-study-heading h2 { font-size: 40px; } .logo-stage::before { width: 60vw; } .logo-stage::after { width: 50vw; } .about { padding: 40px 24px 80px; } .about-content { grid-template-columns: 1fr; gap: 38px; } h2 { font-size: 40px; } .about-content p { font-size: 14px; } }
 @media (max-width: 700px) { .why-join { padding: 56px 24px 40px; } .why-join-heading { margin-bottom: 36px; } .why-join-heading h2 { font-size: 40px; } .why-join-heading p { font-size: 14px; } .why-join-grid { gap: 42px 18px; } .why-card h3 { margin: 18px 0 8px; font-size: 20px; } .why-card p { font-size: 14px; line-height: 1.8; } }
 @media (max-width: 700px) { .departments { padding: 40px 24px 72px; } .departments-heading { margin-bottom: 36px; } .departments-heading p { font-size: 14px; } .departments-grid { gap: 16px; } .department { min-height: 0; padding: 24px; } .department h3 { font-size: 20px; } .department p { font-size: 14px; line-height: 1.8; } }
+@media (max-width: 700px) { .activities { padding: 40px 24px 72px; } .activities h2 { margin-bottom: 28px; } .activities-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } .activity-featured { grid-column: span 2; grid-row: auto; aspect-ratio: 16 / 10; } .activity figcaption { right: 12px; bottom: 12px; left: 12px; font-size: 14px; } .activity-featured figcaption { right: 16px; bottom: 16px; left: 16px; font-size: 17px; } }
 @media (max-width: 700px) { .join { padding: 40px 24px 72px; } .join-copy > p { font-size: 14px; } .join-group { padding: 24px; } .join-group p { font-size: 14px; } }
 @media (max-width: 460px) { .why-join-grid { grid-template-columns: 1fr; } .why-card img { aspect-ratio: 16 / 9; } }
 @media (max-width: 600px) { .departments-grid { grid-template-columns: 1fr; } .department p:last-child { margin-top: 24px; padding-top: 0; } }
